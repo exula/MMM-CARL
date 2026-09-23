@@ -1,5 +1,6 @@
 "use strict";
 const { createDebug } = require("./lib/debug");
+const { loadSettings, ConfigError } = require("./lib/settings");
 const NodeHelper = require("node_helper");
 const { loadAccounts } = require("./lib/accounts");
 const { LoanService } = require("./lib/service");
@@ -16,17 +17,16 @@ module.exports = NodeHelper.create({
     try {
       // Account settings come from the module config; cookies stay in the helper.
       const accounts = loadAccounts(config);
-      const seconds = Number(config.pollSeconds ?? 3600);
-      if (!Number.isFinite(seconds) || seconds < 300 || seconds > 86400) throw new Error("CONFIG");
+      const settings = loadSettings(config);
       this.service = new LoanService(accounts, {
-        interval: seconds * 1000, debug,
+        interval: settings.interval, debug, clientOptions: settings,
         publish: data => this.sendSocketNotification("CATALOGPLUS_DATA", data)
       });
-      debug("helper.start", { accounts: accounts.length, intervalMs: seconds * 1000 });
+      debug("helper.start", { accounts: accounts.length, intervalMs: settings.interval });
       this.service.poll();
-    } catch {
+    } catch (error) {
       debug("config.invalid");
-      this.sendSocketNotification("CATALOGPLUS_ERROR", "CatalogPlus configuration is missing or invalid. Check accounts and pollSeconds.");
+      this.sendSocketNotification("CATALOGPLUS_ERROR", error instanceof ConfigError ? error.message : "MMM-CARL could not start. Check the server installation and configuration.");
     }
   },
   stop() { this.service?.stop(); }

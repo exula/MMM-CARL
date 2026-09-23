@@ -2,8 +2,33 @@
   "name": "mmm-carl",
   "version": "1.0.0",
   "private": true,
-  "description": "Household CatalogPlus loans for MagicMirror²",
-  "engines": { "node": ">=20.19.0" },
-  "scripts": { "test": "node --test", "check": "node scripts/check-account.js" },
-  "dependencies": { "tough-cookie": "^6.0.0" }
+  "description": "MagicMirror\u00b2 module for household library loans, due dates and book covers from TLC CatalogPlus / LS2 PAC.",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/check-account.js",
+    "validate": "node scripts/validate.js"
+  },
+  "dependencies": {
+    "tough-cookie": "^6.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/exula/MMM-CARL.git"
+  },
+  "homepage": "https://github.com/exula/MMM-CARL#readme",
+  "bugs": {
+    "url": "https://github.com/exula/MMM-CARL/issues"
+  },
+  "keywords": [
+    "magicmirror",
+    "magicmirror-module",
+    "MMM-CARL",
+    "library",
+    "catalogplus",
+    "ls2-pac",
+    "tlc"
+  ]
 }

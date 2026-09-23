@@ -1,6 +1,7 @@
 /* global Module, MM, CatalogPlusDisplay, CarlDebug */
 Module.register("MMM-CARL", {
   defaults: {
+    catalogUrl: "https://catalogplus.libraryweb.org", configName: "default",
     accounts: [], pollSeconds: 3600, debug: false,
     rotateWith: null, rotationInterval: 30000, rotationAnimationSpeed: 400,
     showAccount: true, groupByAccount: false, showAuthor: true, showFormat: true,
@@ -58,7 +59,7 @@ Module.register("MMM-CARL", {
     // This timer must continue while CARL is suspended/hidden, so it can show itself again.
   },
   subscribe() {
-    this.sendSocketNotification("CATALOGPLUS_SUBSCRIBE", { accounts: this.config.accounts, pollSeconds: this.config.pollSeconds, debug: this.config.debug });
+    this.sendSocketNotification("CATALOGPLUS_SUBSCRIBE", { catalogUrl: this.config.catalogUrl, configName: this.config.configName, accounts: this.config.accounts, pollSeconds: this.config.pollSeconds, debug: this.config.debug });
   },
   startClock() {
     clearInterval(this.clock);

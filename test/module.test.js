@@ -60,6 +60,7 @@ test("helper reads configured accounts once and never echoes credentials", () =>
   const messages = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../node_helper.js"), "utf8"), {
     require(name) {
+      if (name === "./lib/settings") return require("../lib/settings");
       if (name === "./lib/debug") return require("../lib/debug");
       if (name === "node_helper") return { create(value) { definition = value; } };
       if (name === "./lib/accounts") return { loadAccounts(value) { assert.equal(value, config); return [{ id: "HOME" }]; } };

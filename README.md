@@ -1,41 +1,99 @@
 # MMM-CARL
 
-Compact household library loans for MagicMirror², using the CatalogPlus JSON endpoints at `catalogplus.libraryweb.org`. Each account has its own server-side cookie jar. Enter each account’s card and last name directly in the module’s MagicMirror `config.js` settings. No environment variables are required.
+[![CI](https://github.com/exula/MMM-CARL/actions/workflows/ci.yml/badge.svg)](https://github.com/exula/MMM-CARL/actions/workflows/ci.yml)
 
-## Install and verify independently
+Compact household library loans for MagicMirror², using the CatalogPlus JSON endpoints at `catalogplus.libraryweb.org`. Each account has its own server-side cookie jar. Enter each account’s card and password (or last name for surname-based login) directly in the module’s MagicMirror `config.js` settings. No environment variables are required.
 
-Requires Node.js 20.19 or later and a compatible MagicMirror² installation. The module name and installation directory are **MMM-CARL**. Clone it with the destination name below (or copy the existing checkout into `MagicMirror/modules/MMM-CARL`):
+![MMM-CARL compact and cover-card layouts](docs/preview.png)
+
+*Rendered with synthetic loan data; the cover-card preview shows missing-image placeholders.*
+
+- Household accounts sorted by due date, with today/overdue highlighting.
+- Optional covers, metadata, account groups and configurable sizing.
+- Hourly polling, separate account sessions and saved results during outages.
+- Optional alternation with another module in the same display region.
+
+## Services and credentials
+
+The module uses the library's [CatalogPlus JSON service](https://catalogplus.libraryweb.org/) and optionally [TLC's cover-content service](https://ls2content.tlcdelivers.com/). A valid library card and password/PIN or surname are required. Users do not need a separate developer API key for the verified library. The cover `customerID` identifies the library's content-service configuration, not the patron. These are unofficial catalog endpoints and can change.
+
+## Will my library work?
+
+**Verified:** `catalogplus.libraryweb.org`, with surname-based login, live loan retrieval, session reuse, offset pagination and cover-image requests.
+
+**Supported in configuration, but not live-verified elsewhere:** other TLC LS2 PAC/CatalogPlus catalogs that expose the same login and loan JSON endpoints. Set `catalogUrl` to that catalog's HTTPS address. Password/PIN login sends the exact password you configure; the surname fallback continues working for existing users.
+
+**Not a universal library connector:** the CARL name does not guarantee compatibility with every CARL installation. Other catalog products, SSO/MFA/CAPTCHA logins, or different endpoint/payload formats are not supported. Verify with the standalone checker before adding the module to your display. Other libraries may need their own `configName`, cover `customerID`, `contentServerAddress`, and `timeZone`.
+
+## Installation
+
+MMM-CARL runs inside an existing [MagicMirror² installation](https://docs.magicmirror.builders/getting-started/installation.html). It is not a standalone application. Use a Node.js version supported by your MagicMirror release; this module requires **Node.js 20.19 or newer**. No separate build or npm start command is needed for the module.
+
+Run these commands on the machine running MagicMirror (adjust `~/MagicMirror` if installed elsewhere):
 
 ```sh
 cd ~/MagicMirror/modules
-git clone https://github.com/exula/MMM-CARL.git MMM-CARL
+git clone https://github.com/exula/MMM-CARL.git
 cd MMM-CARL
+npm ci
 ```
 
-Once the implementation is in that directory, install and test:
+`npm ci` installs the versions in `package-lock.json`. Run it in the module directory, not the MagicMirror root. The included `pnpm-lock.yaml` is optional for contributors using pnpm; npm is the documented installation path.
+
+## Configuration
+
+Add this entry to the `modules` array in your MagicMirror `config/config.js`. Replace the placeholders, then restart MagicMirror. Keep the directory and module name exactly `MMM-CARL`:
+
+```js
+{
+  module: "MMM-CARL",
+  position: "top_right",
+  header: "Library loans",
+  config: {
+    accounts: [
+      { name: "My library", card: "YOUR_LIBRARY_CARD", password: "YOUR_PASSWORD_OR_PIN" }
+    ]
+  }
+}
+```
+
+For surname-based login, replace `password` with `lastName: "YOUR_LAST_NAME"`. If the catalog requires both a surname and a separate password, supply both. An explicit password takes precedence and is sent exactly as entered (including spaces); quote numeric PINs and card numbers to preserve leading zeros. Existing surname-only configurations need no changes.
+
+`config.example.js` provides a copyable sample with optional covers. The full option reference below is optional: compact due-date sorting and hourly polling work without appearance settings.
+
+## Check the connection
+
+After saving your MagicMirror configuration, run this from `MagicMirror/modules/MMM-CARL`:
 
 ```sh
-npm install
-npm test
+npm run check
 ```
 
-A `pnpm-lock.yaml` is also included; use `pnpm install --frozen-lockfile` for the exact dependency versions used during validation.
-
-After adding the configuration below, check login and loan retrieval independently:
+For a custom configuration path:
 
 ```sh
-npm run check -- /path/to/MagicMirror/config/config.js
+npm run check -- /absolute/path/to/config.js
 ```
 
-When installed under `MagicMirror/modules/MMM-CARL`, `npm run check` finds the standard MagicMirror config automatically. You can also pass a CommonJS file exporting just `{ accounts: [...] }`. The checker uses the first enabled `MMM-CARL` entry in a full MagicMirror config.
+This executable check logs in, retrieves loans, and checks session reuse without starting the display. It reports account indices and loan counts, returning a nonzero exit code if any account fails. Debug mode adds sanitized diagnostics. It never renews or modifies loans and does not print credentials, titles, response bodies or cookies.
 
-The executable `./scripts/check-account.js` logs in, retrieves all pages, then retrieves again to check session reuse. It prints account indices and loan counts only. Exit code is nonzero if any account fails. It does not print titles, credentials, response bodies, or cookies.
+The checker uses the first enabled `MMM-CARL` entry in a full MagicMirror configuration. It also accepts a CommonJS file exporting just `{ accounts: [...] }`. `config.example.js` contains placeholders; replace them locally before using it for a connection check.
 
-No real credentials are included. Automated tests use synthetic values and mocked responses. Login, loan retrieval and session reuse have been verified locally against the live service; the checker makes real login/loan requests but never renews or modifies loans.
+## Updating
 
-## MagicMirror configuration
+On the MagicMirror machine:
 
-Add this entry to the `modules` array in your MagicMirror config, replacing the placeholders. Restart MagicMirror after changing account settings.
+```sh
+cd ~/MagicMirror/modules/MMM-CARL
+git pull --ff-only
+npm ci
+```
+
+Restart MagicMirror using your normal launch method and reload any separate browser clients. Configuration belongs in MagicMirror's `config/config.js`, outside this module's repository, so module updates preserve account settings. If Git reports local edits, review those changes before updating.
+
+## Multiple accounts
+
+For a household, add accounts to the same module entry. This example uses surname-based login and explicitly shows some default display settings. Restart MagicMirror after changing accounts.
 
 ```js
 {
@@ -61,27 +119,55 @@ Add this entry to the `modules` array in your MagicMirror config, replacing the 
 }
 ```
 
-Use one account entry or up to 20. Keep card numbers in quotes to preserve leading zeros. `name` is an optional display label; `card` and `lastName` are required strings.
+Use one account entry or up to 20. Keep card numbers in quotes to preserve leading zeros. `name` is an optional display label; `card` plus either `password` or `lastName` are required strings. `lastName` is omitted from the login payload when not configured.
 
 Default polling is hourly. Set `pollSeconds` to change it (300–86400 seconds). Polls run after the previous poll finishes, with no overlap. All display instances share the first configured household and a single poller; use the same accounts and polling settings in each instance. Repeated subscriptions do not force extra logins.
 
-## Display
+## Catalog settings
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `catalogUrl` | `"https://catalogplus.libraryweb.org"` | HTTPS catalog base URL, optionally with a path such as `/ls2pac`. No login/query URL. |
+| `configName` | `"default"` | Value for the catalog's `Ls2pac-config-name` header. |
+| `pollSeconds` | `3600` | Server polling, 300–86400 seconds. |
+| `customerID` | `"009787"` | Library's TLC cover-service customer, not a patron ID. |
+| `contentServerAddress` | `"https://ls2content.tlcdelivers.com"` | Cover-service address. |
+
+Catalog and cover settings are independent. Changing `catalogUrl` does not automatically discover cover settings. All accounts in one mirror use the same catalog; separate libraries with different endpoints in the same running mirror are not currently supported. Multiple display instances share the first instance's account/catalog/polling settings.
+
+### Troubleshooting setup
+
+- **Configuration error:** the screen/checker names the missing setting or account index without printing its value. Keep cards and passwords quoted.
+- **Login failed:** first try the same card and password on the library website. For surname login use `lastName`; for a PIN use `password`. If web login works, check whether the catalog uses a different API or login flow.
+- **No cover:** enable `showCovers`, check the library's cover customer/server settings, and confirm the record has UPC/ISBN identifiers. Missing covers use placeholders.
+- **Nothing listed:** check `filter`, `accountNames`, `hideWhenEmpty`, and any account error. `browser.data` debug counts distinguish empty results from failures and pending requests.
+- **Stale items:** the account's last successful list stays visible when the library is temporarily unreachable. The module retries on its next scheduled poll.
+
+## Display defaults
 
 - Default view sorts all household loans globally by due date, unknown dates last.
 - `maxItems` limits the earliest items shown; `0` shows everything. A footer counts remaining items.
-- `groupByAccount: true` groups the globally selected items by account. Groups are ordered by their earliest displayed due date; items within each group remain sorted. Grouping necessarily replaces strict global row order.
+- `groupByAccount: true` groups the globally selected items by account. Groups follow their first item in the selected sort order; items within each group remain sorted. Grouping necessarily replaces strict global row order.
 - `showAccount: false` hides account labels, including in error messages. `showAuthor` and `showFormat` toggle metadata.
 - Dates and days remaining use the configured time zone and calendar days, handling daylight saving changes. The display refreshes every minute even between polls.
 - CSS states: `catalogplus-normal`, `catalogplus-soon` (4–7 days), `catalogplus-warning` (1–3 days), `catalogplus-due-today`, and `catalogplus-overdue`. Thresholds are configurable; keep `warningDays <= soonDays`.
 - Unknown epoch dates use `dueDateString` as display-only fallback, with no guessed countdown. Missing metadata is omitted.
 - On account failures, the last successful loans remain visible with dashed borders and an account error showing the saved date. Other accounts continue updating. An empty result is distinguished from a failed or still-loading result.
 
-## Appearance and UX options
+## Display options
 
 All options go inside the module's `config`. Defaults preserve the compact, text-only display. Each display instance can choose its own appearance and filters.
 
 | Option | Default | Behavior |
 | --- | --- | --- |
+| `showAccount` | `true` | Show the account label beside each loan or as a group heading. |
+| `groupByAccount` | `false` | Group selected rows by account instead of strict global order. |
+| `showAuthor` / `showFormat` | `true` / `true` | Toggle author and format metadata. |
+| `maxItems` | `10` | Maximum matching loans shown; `0` shows all. |
+| `soonDays` / `warningDays` | `7` / `3` | Countdown thresholds; keep warning at or below soon. |
+| `locale` | `"en-US"` | Date formatting and text sorting locale. |
+| `timeZone` | `"America/New_York"` | Time zone for due dates and calendar-day countdowns. Change for your library. |
+| `animationSpeed` | `300` | Content-update animation duration in milliseconds. |
 | `width` | `"360px"` | Number of pixels or CSS length (`px`, `rem`, `em`, `%`, `vw`, `vh`); `auto` also works. |
 | `maxHeight` | `"none"` | Optional height limit with manual vertical scrolling. No automatic scrolling. |
 | `density` | `"compact"` | `compact`, `comfortable`, or `spacious`. |
@@ -120,7 +206,7 @@ All options go inside the module's `config`. Defaults preserve the compact, text
 | `filter` | `"all"` | `all`, `overdue`, or `dueSoon` (includes overdue, today, and up to `soonDays`). Unknown dates appear only in `all`. |
 | `accountNames` | `[]` | Exact public account names to show; empty means all accounts. Does not change server polling. |
 
-Existing controls include `showAccount`, `groupByAccount`, `showAuthor`, `showFormat`, `maxItems`, `soonDays`, `warningDays`, `locale`, `timeZone`, and `animationSpeed` (milliseconds). Filters apply before sorting and limiting. Account grouping is applied to the selected rows and overrides strict global ordering; groups follow their first item in the selected sort order.
+Filters apply before sorting and limiting. Account grouping is applied to the selected rows and overrides strict global ordering; groups follow their first item in the selected sort order.
 
 A roomier cover-oriented display (merge into your existing config with `accounts`):
 
@@ -168,7 +254,7 @@ The response also carries library-wide holdings, tags/reviews, generic hold-acti
 
 ## Protocol and sessions
 
-The client POSTs `/login?rememberMe=true` with `username`, `lastName`, `rememberMe: true`, and `password` equal to the last name, plus the supplied CatalogPlus headers. It then GETs `/loans/0/20/Status`. HTTP-only, Secure, domain/path-scoped, expiring and rotating cookies (including `TLC_PAT_KEY` and `JSESSIONID`) are managed by [tough-cookie](https://github.com/salesforce/tough-cookie). Cookie jars remain in memory and disappear on restart.
+The client POSTs `/login?rememberMe=true` with `username`, `rememberMe: true`, the configured `password` (falling back to `lastName`), and `lastName` only when configured, plus the CatalogPlus headers. It then GETs `/loans/0/20/Status`. HTTP-only, Secure, domain/path-scoped, expiring and rotating cookies (including `TLC_PAT_KEY` and `JSESSIONID`) are managed by [tough-cookie](https://github.com/salesforce/tough-cookie). Cookie jars remain in memory and disappear on restart.
 
 The first path number is treated as an **offset**: subsequent full pages request `/loans/20/20/Status`, `/loans/40/20/Status`, etc., until a short page. Offset pagination was verified live using two-item pages: offsets 0 and 2 returned two distinct loans each, matching the full four-loan result, and offset 4 returned an empty page. Larger accounts remain covered by simulated pagination tests. Repeated records or more than 100 full pages produce an explicit error rather than silently truncating data. No total-count field is assumed.
 
@@ -207,15 +293,30 @@ Server diagnostics appear in the MagicMirror terminal or service logs. Display d
 
 No card numbers, login last names, account labels, titles, UPCs, image URLs, cookies, request/response bodies or raw exceptions are logged. Accounts are identified by their 1-based position in the configuration. Request response timing is time to response headers; failed-request timing includes time spent before failure. Cover failures are counted as events without identifying the item. Debug logs do not trigger additional requests. For multiple display instances, the first subscription sets server debugging along with the shared household configuration; use the same `debug` value in each instance.
 
-## Files and validation
+## Development and validation
 
 `scripts/check-account.js` and the module use the same `lib/client.js`. `node_helper.js` receives the account configuration and starts `lib/service.js`. `MMM-CARL.js`, `lib/display.js` and `MMM-CARL.css` render the browser display using text nodes.
 
-All 28 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering, the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. Live login, loan retrieval and session reuse have been verified locally. Offset pagination was verified live with two-item pages, and cover endpoints returned image responses for all four current loans. The actual MagicMirror deployment still needs a deployment check.
+Run source/documentation validation and offline tests from the module directory:
+
+```sh
+npm run validate
+npm test
+```
+
+GitHub Actions runs these checks on pushes, pull requests and manual dispatches with Node.js 20.19.0 (the module minimum), 22 and 24 on Linux. CI uses locked dependencies, read-only repository permissions, and pinned actions. It does not run `npm run check`, use library credentials, contact the catalog, deploy, or publish packages. Network access is used to install Node.js and npm dependencies. CI does not replace testing in an actual MagicMirror/Electron installation.
+
+Tests use synthetic fixtures and mocked responses: authentication, password/PIN handling, cookie isolation and renewal, pagination, error redaction, display options, cover URLs, rotation and preservation of MagicMirror module metadata. They do not contact the live library or require credentials.
+
+Live login, loan retrieval, session reuse, offset pagination and cover responses have also been verified against `catalogplus.libraryweb.org`. These checks do not establish compatibility with every other library or MagicMirror version.
+
+`package.json` uses the npm-compatible package name `mmm-carl`; MagicMirror uses the case-sensitive `MMM-CARL` folder, script and registration name. `private: true` prevents accidental npm publication and does not prevent installing this GitHub-hosted MagicMirror module. MagicMirror supplies `node_helper`; it is not an npm dependency. Start and restart the application from the MagicMirror installation, not this module directory.
 
 Module lifecycle and socket conventions follow the [MagicMirror node-helper documentation](https://docs.magicmirror.builders/module-development/node-helper.html) and [core module documentation](https://docs.magicmirror.builders/module-development/core-module-file.html).
 
 
-### Blank display after the clock loads
+## Support
 
-Earlier versions of MMM-CARL overwrote MagicMirror's reserved `this.data` module metadata. This is fixed by storing library results separately in `this.loanData`. Update the remote installation's `MMM-CARL.js` (or deploy the full updated module), restart the MagicMirror process, and reload any separate browser clients. This fix requires no account configuration changes.
+Report reproducible issues at [GitHub Issues](https://github.com/exula/MMM-CARL/issues). Include your MagicMirror and Node.js versions, catalog hostname, what you expected, and sanitized debug output. Do not include your full account configuration, card, password, cookies or API keys from other modules.
+
+If an older MMM-CARL version causes a blank display after the clock loads, update the full module and restart MagicMirror. The reserved module-metadata overwrite has been fixed; no account configuration changes are needed.
