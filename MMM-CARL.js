@@ -1,5 +1,5 @@
 /* global Module, CatalogPlusDisplay */
-Module.register("MMM-CatalogPlus", {
+Module.register("MMM-CARL", {
   defaults: {
     accounts: [], pollSeconds: 3600,
     showAccount: true, groupByAccount: false, showAuthor: true, showFormat: true,
@@ -16,7 +16,7 @@ Module.register("MMM-CatalogPlus", {
     sortBy: "dueDate", filter: "all", accountNames: [],
     colorMode: "color", showStatusBorder: true
   },
-  getStyles() { return ["MMM-CatalogPlus.css"]; },
+  getStyles() { return ["MMM-CARL.css"]; },
   getScripts() { return [this.file("lib/display.js")]; },
   start() {
     this.data = null;

@@ -11,7 +11,7 @@ async function main() {
     const configPath = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(__dirname, "../../../config/config.js");
     const config = require(configPath);
     const settings = Array.isArray(config.modules)
-      ? config.modules.find(entry => entry.module === "MMM-CatalogPlus" && !entry.disabled)?.config
+      ? config.modules.find(entry => entry.module === "MMM-CARL" && !entry.disabled)?.config
       : config;
     accounts = loadAccounts(settings);
   }

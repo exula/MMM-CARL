@@ -14,8 +14,8 @@ class Element {
 function flatten(node) { return [node, ...node.children.flatMap(flatten)]; }
 function moduleInstance() {
   let definition;
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../MMM-CatalogPlus.js"), "utf8"), {
-    Module: { register(name, value) { assert.equal(name, "MMM-CatalogPlus"); definition = value; } },
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../MMM-CARL.js"), "utf8"), {
+    Module: { register(name, value) { assert.equal(name, "MMM-CARL"); definition = value; } },
     CatalogPlusDisplay: display, document: { createElement: tag => new Element(tag) },
     URL, Intl, Date, setInterval, clearInterval
   });

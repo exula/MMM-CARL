@@ -1,15 +1,15 @@
-# MMM-CatalogPlus
+# MMM-CARL
 
 Compact household library loans for MagicMirror², using the CatalogPlus JSON endpoints at `catalogplus.libraryweb.org`. Each account has its own server-side cookie jar. Enter each account’s card and last name directly in the module’s MagicMirror `config.js` settings. No environment variables are required.
 
 ## Install and verify independently
 
-Requires Node.js 20.19 or later and a compatible MagicMirror² installation. This repository is named `MMM-CARL`, but the registered module and installation directory are **MMM-CatalogPlus**. Clone it with the destination name below (or copy the existing checkout into `MagicMirror/modules/MMM-CatalogPlus`):
+Requires Node.js 20.19 or later and a compatible MagicMirror² installation. The module name and installation directory are **MMM-CARL**. Clone it with the destination name below (or copy the existing checkout into `MagicMirror/modules/MMM-CARL`):
 
 ```sh
 cd ~/MagicMirror/modules
-git clone https://github.com/exula/MMM-CARL.git MMM-CatalogPlus
-cd MMM-CatalogPlus
+git clone https://github.com/exula/MMM-CARL.git MMM-CARL
+cd MMM-CARL
 ```
 
 Once the implementation is in that directory, install and test:
@@ -27,7 +27,7 @@ After adding the configuration below, check login and loan retrieval independent
 npm run check -- /path/to/MagicMirror/config/config.js
 ```
 
-When installed under `MagicMirror/modules/MMM-CatalogPlus`, `npm run check` finds the standard MagicMirror config automatically. You can also pass a CommonJS file exporting just `{ accounts: [...] }`. The checker uses the first enabled `MMM-CatalogPlus` entry in a full MagicMirror config.
+When installed under `MagicMirror/modules/MMM-CARL`, `npm run check` finds the standard MagicMirror config automatically. You can also pass a CommonJS file exporting just `{ accounts: [...] }`. The checker uses the first enabled `MMM-CARL` entry in a full MagicMirror config.
 
 The executable `./scripts/check-account.js` logs in, retrieves all pages, then retrieves again to check session reuse. It prints account indices and loan counts only. Exit code is nonzero if any account fails. It does not print titles, credentials, response bodies, or cookies.
 
@@ -39,7 +39,7 @@ Add this entry to the `modules` array in your MagicMirror config, replacing the 
 
 ```js
 {
-  module: "MMM-CatalogPlus",
+  module: "MMM-CARL",
   position: "top_right",
   header: "Library loans",
   config: {
@@ -161,7 +161,7 @@ The browser sends the configured accounts to the helper for authentication. The 
 
 ## Files and validation
 
-`scripts/check-account.js` and the module use the same `lib/client.js`. `node_helper.js` receives the account configuration and starts `lib/service.js`. `MMM-CatalogPlus.js`, `lib/display.js` and `MMM-CatalogPlus.css` render the browser display using text nodes.
+`scripts/check-account.js` and the module use the same `lib/client.js`. `node_helper.js` receives the account configuration and starts `lib/service.js`. `MMM-CARL.js`, `lib/display.js` and `MMM-CARL.css` render the browser display using text nodes.
 
 All 16 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. The actual MagicMirror integration and live CatalogPlus endpoints still require a deployment check.
 
