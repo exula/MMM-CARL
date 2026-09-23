@@ -31,7 +31,7 @@ When installed under `MagicMirror/modules/MMM-CARL`, `npm run check` finds the s
 
 The executable `./scripts/check-account.js` logs in, retrieves all pages, then retrieves again to check session reuse. It prints account indices and loan counts only. Exit code is nonzero if any account fails. It does not print titles, credentials, response bodies, or cookies.
 
-No real credentials are included. Automated tests use synthetic values and mocked responses. Live authentication must be verified in your own environment; the checker makes real login/loan requests but never renews or modifies loans.
+No real credentials are included. Automated tests use synthetic values and mocked responses. Login, loan retrieval and session reuse have been verified locally against the live service; the checker makes real login/loan requests but never renews or modifies loans.
 
 ## MagicMirror configuration
 
@@ -91,12 +91,19 @@ All options go inside the module's `config`. Defaults preserve the compact, text
 | `titleLines` | `0` | Unlimited wrapping; a positive integer clamps the title to that many lines. Full title remains in the hover tooltip. |
 | `colorMode` | `"color"` | `color` or `monochrome`; countdown text still communicates urgency. |
 | `showStatusBorder` | `true` | Show the due-status border; stale rows use a dashed border when enabled. |
-| `showCovers` | `false` | Load cover images using the TLC UPC endpoint. |
+| `showCovers` | `false` | Load cover images using TLC UPC or ISBN endpoints. |
 | `coverCustomerId` | `"009787"` | Customer ID for TLC covers; keep it quoted to preserve leading zeros. |
 | `coverWidth` / `coverHeight` | `42` / `62` | Image dimensions in pixels (width 20–200, height 20–300). |
+| `coverSize` | `"medium"` | TLC image request size: `small` (`BOOKJACKET-SM`) or `medium` (`BOOKJACKET-MD`). |
 | `coverFit` | `"contain"` | `contain` shows the whole image; `cover` fills the box with cropping. |
 | `coverPlaceholder` | `true` | Show a neutral icon for missing/failed images; otherwise omit their image slot. |
 | `coverUrls` | `{}` | Optional HTTPS image URLs keyed by loan `itemId`, overriding automatic covers. |
+| `showCallNumber` | `false` | Show the loan's call number, falling back to the catalog record. |
+| `showPublicationDate` | `false` | Show the catalog publication date/year as supplied. |
+| `showExtent` | `false` | Show the physical description (pages, discs, duration, etc.) when supplied. |
+| `showSeries` | `false` | Show the main series when supplied. |
+| `showCheckoutDate` | `false` | Show the checkout date, with a server-formatted string fallback. |
+| `showLoanStatus` | `false` | Show any supplied loan status/message. Does not infer renewal eligibility. |
 | `showBranch` | `false` | Include the transaction branch when available. |
 | `showDueDate` / `showDaysRemaining` | `true` / `true` | Independently show the calendar date and countdown. |
 | `dateFormat` | `{ month: "short", day: "numeric" }` | Standard `Intl.DateTimeFormat` options; `timeZone` comes from the module setting. |
@@ -145,23 +152,31 @@ colorMode: "monochrome"
 
 ### Cover data
 
-Automatic covers use `https://ls2content3.tlcdelivers.com/tlccontent` with `customerid=009787`, `appid=ls2pac`, `requesttype=BOOKJACKET-MD`, and the item's `upc`. The helper accepts a string UPC (or an array of string UPCs) in `resource.upc` or top-level `upc`, preserving leading zeros. These field locations still need verification against a live loan response. Without a UPC, the module shows the placeholder; it does not infer a UPC from the title or item ID. Numeric UPC values are not guessed or zero-padded.
+Live loan records expose cover identifiers in `resource.standardNumbers`, as `{ type: "Upc" | "Isbn", data: "..." }`. MMM-CARL preserves all unique UPCs and ISBNs in their supplied order, removes spaces/hyphens, and preserves leading zeros and ISBN-10 X check digits. Legacy `resource.upc`/`resource.isbn` and top-level equivalents are also accepted. Numeric identifiers are not guessed or zero-padded.
 
-Image precedence is `coverUrls[itemId]`, then an optional `resource.coverUrl` supplied by the endpoint, then the TLC URL generated from a UPC. Only HTTPS URLs are loaded. Images load lazily with no referrer, and errors switch to the placeholder. A provider-supplied “no cover” image is shown as returned. No library authentication cookie is attached by this module to cover requests.
+UPC covers use `https://ls2content3.tlcdelivers.com/tlccontent`; ISBN covers use `https://ls2content2.tlcdelivers.com/tlccontent`. Both send `customerid=009787`, `appid=ls2pac`, and `requesttype=BOOKJACKET-MD` by default (`BOOKJACKET-SM` with `coverSize: "small"`). Every identifier is sent as a repeated `upc` or `isbn` query parameter, matching the catalog's multi-ISBN requests. UPC is preferred if a record contains both types.
+
+Image precedence is `coverUrls[itemId]`, then an optional `resource.coverUrl`, then the generated TLC request. Only HTTPS URLs are loaded. Images load lazily with no referrer, and errors switch to the placeholder. A provider-supplied “no cover” image is shown as returned. No library authentication cookie is attached by this module to cover requests. The live `imageDisplays` entries are format icons such as `Book.png`, not book jackets, and are not treated as cover URLs.
+
+### Live-data field mapping
+
+The module retains loan/item and catalog identifiers, title/author (with top-level fallbacks), format, transaction branch, due date and formatted fallback, UPCs/ISBNs, call number, publication date, physical extent, series, checkout date, status/message, and downloadable flag. Optional metadata stays hidden unless enabled; fields absent from the response are omitted. Checkout date and status/message were empty in the tested account, so their rendering is covered by synthetic tests.
+
+The response also carries library-wide holdings, tags/reviews, generic hold-action flags and fee fields. These are not presented as the checked-out item's availability, renewal eligibility or a payable balance: their meaning/units have not been established. No loan-renewal or other account mutations are performed.
 
 ## Protocol and sessions
 
 The client POSTs `/login?rememberMe=true` with `username`, `lastName`, `rememberMe: true`, and `password` equal to the last name, plus the supplied CatalogPlus headers. It then GETs `/loans/0/20/Status`. HTTP-only, Secure, domain/path-scoped, expiring and rotating cookies (including `TLC_PAT_KEY` and `JSESSIONID`) are managed by [tough-cookie](https://github.com/salesforce/tough-cookie). Cookie jars remain in memory and disappear on restart.
 
-The first path number is treated as an **offset**: subsequent full pages request `/loans/20/20/Status`, `/loans/40/20/Status`, etc., until a short page. This is an unverified extension of the supplied first-page endpoint; confirm with the checker on an account with more than 20 loans. Repeated records or more than 100 full pages produce an explicit error rather than silently truncating data. No total-count field is assumed.
+The first path number is treated as an **offset**: subsequent full pages request `/loans/20/20/Status`, `/loans/40/20/Status`, etc., until a short page. Offset pagination was verified live using two-item pages: offsets 0 and 2 returned two distinct loans each, matching the full four-loan result, and offset 4 returned an empty page. Larger accounts remain covered by simulated pagination tests. Repeated records or more than 100 full pages produce an explicit error rather than silently truncating data. No total-count field is assumed.
 
-401/403, redirects, non-JSON responses and missing `loans` arrays trigger one fresh login and one complete retrieval retry. Redirects are never followed with credentials. The exact login JSON result is not assumed beyond an explicit `success: false`; usable cookies plus a loans response establish success. Network failures, timeouts and server errors wait for the next poll. Rate limiting also waits for the next poll. Every request has a 20-second timeout. A changed JSON schema may surface as an authentication or response error; endpoint behavior is unofficial and may change.
+Valid JSON without a `Content-Type` header is accepted (observed on live login). 401/403, redirects, explicitly non-JSON responses and missing `loans` arrays trigger one fresh login and one complete retrieval retry. Redirects are never followed with credentials. The exact login JSON result is not assumed beyond an explicit `success: false`; usable cookies plus a loans response establish success. Network failures, timeouts and server errors wait for the next poll. Rate limiting also waits for the next poll. Every request has a 20-second timeout. A changed JSON schema may surface as an authentication or response error; endpoint behavior is unofficial and may change.
 
 The browser sends the configured accounts to the helper for authentication. The helper returns only normalized loan fields, public account ID/name, last-update time and fixed error messages. Credentials and cookies are never logged or included in these replies. As with other MagicMirror module settings, account credentials are present in the browser configuration. Library loan data is visible to viewers of your MagicMirror, and all instances of this module display the same configured household accounts.
 
 ## Debug logging
 
-Set `debug: true` inside the module's `config` and restart MagicMirror. Default is `false`. The standalone checker also respects this setting in the config it loads.
+Set `debug: true` inside the module's `config` and restart MagicMirror. Default is `false`. The standalone checker also respects this setting in the config it loads. To enable diagnostics for just one check, run `npm run check -- /path/to/config.js --debug`.
 
 ```js
 config: {
@@ -172,7 +187,7 @@ config: {
 }
 ```
 
-Server diagnostics appear in the MagicMirror terminal or service logs. Display diagnostics appear in the browser developer console. All lines start with `[MMM-CARL]` and a timestamp. Server events include poll start/completion and next interval, account index and loan counts, login attempts, session reuse/renewal, page counts, HTTP status, request timing and sanitized error codes. Browser events include startup, received account/loan counts, configuration errors, and failed cover images.
+Server diagnostics appear in the MagicMirror terminal or service logs. Display diagnostics appear in the browser developer console. All lines start with `[MMM-CARL]` and a timestamp. Server events include poll start/completion and next interval, account index and loan counts, login attempts, session reuse/renewal, page counts, HTTP status, request timing and sanitized error codes. Browser events include startup, received account/loan counts, failed and pending account counts, configuration errors, and failed cover images. In `browser.data`, `loans: 0` alone does not prove that the library returned an empty list: `failed > 0` means an account fetch failed, while `pending > 0` means an account has not completed its initial fetch.
 
 No card numbers, login last names, account labels, titles, UPCs, image URLs, cookies, request/response bodies or raw exceptions are logged. Accounts are identified by their 1-based position in the configuration. Request response timing is time to response headers; failed-request timing includes time spent before failure. Cover failures are counted as events without identifying the item. Debug logs do not trigger additional requests. For multiple display instances, the first subscription sets server debugging along with the shared household configuration; use the same `debug` value in each instance.
 
@@ -180,6 +195,6 @@ No card numbers, login last names, account labels, titles, UPCs, image URLs, coo
 
 `scripts/check-account.js` and the module use the same `lib/client.js`. `node_helper.js` receives the account configuration and starts `lib/service.js`. `MMM-CARL.js`, `lib/display.js` and `MMM-CARL.css` render the browser display using text nodes.
 
-All 19 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. The actual MagicMirror integration and live CatalogPlus endpoints still require a deployment check.
+All 25 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering, the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. Live login, loan retrieval and session reuse have been verified locally. Offset pagination was verified live with two-item pages, and cover endpoints returned image responses for all four current loans. The actual MagicMirror deployment still needs a deployment check.
 
 Module lifecycle and socket conventions follow the [MagicMirror node-helper documentation](https://docs.magicmirror.builders/module-development/node-helper.html) and [core module documentation](https://docs.magicmirror.builders/module-development/core-module-file.html).

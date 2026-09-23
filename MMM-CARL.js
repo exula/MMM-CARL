@@ -8,8 +8,9 @@ Module.register("MMM-CARL", {
     width: "360px", maxHeight: "none", density: "compact", fontScale: 1,
     rowGap: null, rowPadding: null, layout: "list", titleLines: 0,
     showCovers: false, coverUrls: {}, coverCustomerId: "009787", coverWidth: 42, coverHeight: 62,
-    coverFit: "contain", coverPlaceholder: true,
-    showBranch: false, showDueDate: true, showDaysRemaining: true,
+    coverFit: "contain", coverSize: "medium", coverPlaceholder: true,
+    showBranch: false, showCallNumber: false, showPublicationDate: false,
+    showExtent: false, showSeries: false, showCheckoutDate: false, showLoanStatus: false, showDueDate: true, showDaysRemaining: true,
     dateFormat: { month: "short", day: "numeric" }, countdownStyle: "short",
     showSummary: false, showLastUpdated: false, showErrors: true,
     showMoreCount: true, hideWhenEmpty: false, emptyMessage: "No items checked out",
@@ -40,7 +41,7 @@ Module.register("MMM-CARL", {
   suspend() { clearInterval(this.clock); },
   resume() { this.startClock(); this.subscribe(); this.updateDom(0); },
   socketNotificationReceived(notification, payload) {
-    if (notification === "CATALOGPLUS_DATA") { this.debugLog("browser.data", { accounts: payload.accounts.length, loans: payload.accounts.reduce((sum, a) => sum + a.loans.length, 0) }); this.data = payload; this.error = null; }
+    if (notification === "CATALOGPLUS_DATA") { this.debugLog("browser.data", { accounts: payload.accounts.length, loans: payload.accounts.reduce((sum, a) => sum + a.loans.length, 0), failed: payload.accounts.filter(a => a.error).length, pending: payload.accounts.filter(a => !a.updatedAt && !a.error).length }); this.data = payload; this.error = null; }
     else if (notification === "CATALOGPLUS_ERROR") { this.debugLog("browser.error"); this.error = payload; }
     else return;
     this.updateDom(this.config.animationSpeed);
@@ -137,7 +138,13 @@ Module.register("MMM-CARL", {
         title.title = loan.title;
         if (Number(c.titleLines) > 0) { title.className += " catalogplus-clamp"; title.style.setProperty("--cp-title-lines", String(Math.max(1, Math.floor(c.titleLines)))); }
         detail.appendChild(title);
-        const meta = [this.config.showAuthor && loan.author, this.config.showFormat && loan.format, c.showBranch && loan.transactionBranch, this.config.showAccount && !this.config.groupByAccount && loan.accountName].filter(Boolean);
+        const meta = [this.config.showAuthor && loan.author, this.config.showFormat && loan.format, c.showBranch && loan.transactionBranch,
+          c.showCallNumber && loan.callNumber && `Call no. ${loan.callNumber}`,
+          c.showPublicationDate && loan.publicationDate,
+          c.showExtent && loan.extent,
+          c.showSeries && loan.series,
+          c.showCheckoutDate && (loan.outDate != null || loan.outDateString) && `Checked out ${loan.outDate != null ? dateFormat.format(loan.outDate) : loan.outDateString}`,
+          c.showLoanStatus && loan.status, c.showLoanStatus && loan.message, this.config.showAccount && !this.config.groupByAccount && loan.accountName].filter(Boolean);
         if (meta.length) detail.appendChild(el("div", "catalogplus-meta xsmall dimmed", meta.join(" · ")));
         row.appendChild(detail);
         const due = el("div", "catalogplus-due");

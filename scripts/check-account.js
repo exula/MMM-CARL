@@ -10,13 +10,15 @@ async function main() {
   let accounts;
   let debug;
   try {
-    const configPath = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(__dirname, "../../../config/config.js");
+    const args = process.argv.slice(2).filter(arg => arg !== "--debug");
+    if (args.length > 1) throw new Error("Invalid arguments");
+    const configPath = args[0] ? path.resolve(args[0]) : path.resolve(__dirname, "../../../config/config.js");
     const config = require(configPath);
     const settings = Array.isArray(config.modules)
       ? config.modules.find(entry => entry.module === "MMM-CARL" && !entry.disabled)?.config
       : config;
     accounts = loadAccounts(settings);
-    debug = createDebug(settings.debug);
+    debug = createDebug(settings.debug === true || process.argv.includes("--debug"));
   }
   catch { console.error("Account config could not be loaded. Run npm run check -- /path/to/config.js; see README.md."); process.exitCode = 1; return; }
   for (let index = 0; index < accounts.length; index++) {

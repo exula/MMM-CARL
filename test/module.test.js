@@ -12,11 +12,11 @@ class Element {
   appendChild(child) { this.children.push(child); }
 }
 function flatten(node) { return [node, ...node.children.flatMap(flatten)]; }
-function moduleInstance() {
+function moduleInstance(debugApi = require("../lib/debug")) {
   let definition;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../MMM-CARL.js"), "utf8"), {
     Module: { register(name, value) { assert.equal(name, "MMM-CARL"); definition = value; } },
-    CarlDebug: require("../lib/debug"), CatalogPlusDisplay: display, document: { createElement: tag => new Element(tag) },
+    CarlDebug: debugApi, CatalogPlusDisplay: display, document: { createElement: tag => new Element(tag) },
     URL, Intl, Date, setInterval, clearInterval
   });
   return { ...definition, config: { ...definition.defaults }, updateDom() {} };
@@ -141,4 +141,34 @@ test("UI size, density, sorting, filters and visibility are independent", () => 
   module.data.accounts[0].loans = [];
   module.data.accounts[0].error = "Unavailable";
   assert.notEqual(module.getDom().hidden, true);
+});
+
+
+test("browser diagnostics distinguish empty success, failure and pending fetch", () => {
+  const events = [];
+  const module = moduleInstance({ createDebug: () => (event, details) => events.push({ event, details }) });
+  for (const state of [
+    { updatedAt: Date.now(), error: null },
+    { updatedAt: null, error: "Unavailable" },
+    { updatedAt: null, error: null }
+  ]) module.socketNotificationReceived("CATALOGPLUS_DATA", { accounts: [{ ...state, loans: [] }] });
+  assert.deepEqual(events.map(e => [e.details.loans, e.details.failed, e.details.pending]), [[0, 0, 0], [0, 1, 0], [0, 0, 1]]);
+});
+
+test("ISBN covers preserve every unique ISBN as a repeated query parameter", () => {
+  const url = new URL(display.coverUrl({ isbn: "9781402894626", isbns: ["9781402894626", "080442957X", "invalid"] }, { coverSize: "small" }));
+  assert.equal(url.origin, "https://ls2content2.tlcdelivers.com");
+  assert.equal(url.searchParams.get("requesttype"), "BOOKJACKET-SM");
+  assert.deepEqual(url.searchParams.getAll("isbn"), ["9781402894626", "080442957X"]);
+  assert.equal(url.searchParams.has("upc"), false);
+});
+
+test("optional loan metadata renders as text and stays hidden by default", () => {
+  const module = moduleInstance();
+  const loan = { title: "Example", dueDate: Date.now(), callNumber: "EXAMPLE-123", extent: "200 pages", publicationDate: "2024", series: "Example series", outDateString: "Example checkout date", status: "Example status", message: "<script>notice</script>" };
+  module.data = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [loan] }] };
+  assert.doesNotMatch(flatten(module.getDom()).map(n => n.textContent).join(" "), /EXAMPLE-123|200 pages/);
+  Object.assign(module.config, { showCallNumber: true, showPublicationDate: true, showExtent: true, showSeries: true, showCheckoutDate: true, showLoanStatus: true });
+  const text = flatten(module.getDom()).map(n => n.textContent).join(" ");
+  for (const value of ["EXAMPLE-123", "200 pages", "2024", "Example series", "Example checkout date", "Example status", "<script>notice</script>"]) assert.ok(text.includes(value));
 });

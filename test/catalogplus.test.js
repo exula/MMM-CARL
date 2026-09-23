@@ -148,3 +148,45 @@ test("calendar days across DST, state boundaries, and global sorting", () => {
   assert.deepEqual([-1, 0, 1, 3, 4, 7, 8, null].map(d => display.state(d)), ["overdue", "due-today", "warning", "warning", "soon", "soon", "normal", "normal"]);
   assert.deepEqual(display.sortLoans([{ title: "Unknown", dueDate: null }, { title: "Later", dueDate: 2 }, { title: "Soon", dueDate: 1 }]).map(l => l.title), ["Soon", "Later", "Unknown"]);
 });
+
+
+test("login accepts valid JSON without a Content-Type header", async () => {
+  const client = new CatalogClient(account, { fetchImpl: async url => {
+    if (url.includes("/login?")) {
+      const result = loggedIn();
+      result.headers.delete("content-type");
+      return result;
+    }
+    return response({ loans: [loan()] });
+  } });
+  assert.equal((await client.getLoans()).length, 1);
+});
+
+test("live-shaped standardNumbers and metadata normalize without private fields", () => {
+  const { normalizeLoan } = require("../lib/client");
+  const result = normalizeLoan({
+    itemId: "example-item", title: "Fallback title", author: "Fallback author", callnumber: "EXAMPLE 123",
+    outDate: 1700000000000, dueDate: 1800000000000, status: "Checked out", message: "Example notice",
+    fee: 123, privateAccount: "must not cross boundary",
+    resource: { id: 123, publicationDate: { publicationDate: "2024" }, extent: "200 pages", mainSeries: "Example series", standardNumbers: [
+      { type: "Upc", data: "043396425101" }, { type: "Isbn", data: "978-1-4028-9462-6" },
+      { type: "Isbn", data: "0-8044-2957-X" }, { type: "Isbn", data: "9781402894626" }, { type: "Isbn", data: "invalid" }
+    ] }
+  });
+  assert.equal(result.title, "Fallback title");
+  assert.equal(result.author, "Fallback author");
+  assert.equal(result.callNumber, "EXAMPLE 123");
+  assert.equal(result.publicationDate, "2024");
+  assert.equal(result.extent, "200 pages");
+  assert.equal(result.series, "Example series");
+  assert.equal(result.upc, "043396425101");
+  assert.deepEqual(result.isbns, ["9781402894626", "080442957X"]);
+  assert.equal(result.outDate, 1700000000000);
+  assert.equal(result.privateAccount, undefined);
+  assert.equal(result.fee, undefined);
+});
+
+test("host-system failure is not treated as a successful empty loan result", async () => {
+  const client = new CatalogClient(account, { fetchImpl: async url => url.includes("/login?") ? loggedIn() : response({ loans: [], hostSystemDiag: { hostSystemFailure: true } }) });
+  await assert.rejects(client.getLoans(), { code: "HTTP" });
+});
