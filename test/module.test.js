@@ -24,7 +24,7 @@ function moduleInstance(debugApi = require("../lib/debug")) {
 test("browser renders global due order, text safely, states, labels and item limit", () => {
   const module = moduleInstance();
   const now = Date.now();
-  module.data = { accounts: [
+  module.loanData = { accounts: [
     { id: "A", name: "First", updatedAt: now, loans: [{ title: "Later", dueDate: now + 10 * 86400000 }] },
     { id: "B", name: "Second", updatedAt: now, loans: [{ title: "<script>example</script>", dueDate: now - 2 * 86400000 }, { title: "Today", dueDate: now }] }
   ] };
@@ -42,14 +42,14 @@ test("browser renders global due order, text safely, states, labels and item lim
 test("browser distinguishes failed, empty, loading and stale accounts", () => {
   const module = moduleInstance();
   assert.match(flatten(module.getDom()).map(n => n.textContent).join(" "), /Loading/);
-  module.data = { accounts: [{ id: "A", name: "Private label", updatedAt: Date.now(), loans: [], error: null }] };
+  module.loanData = { accounts: [{ id: "A", name: "Private label", updatedAt: Date.now(), loans: [], error: null }] };
   assert.match(flatten(module.getDom()).map(n => n.textContent).join(" "), /No items checked out/);
   module.config.showAccount = false;
-  module.data.accounts[0].error = "Unavailable";
+  module.loanData.accounts[0].error = "Unavailable";
   let text = flatten(module.getDom()).map(n => n.textContent).join(" ");
   assert.match(text, /incomplete/);
   assert.doesNotMatch(text, /Private label/);
-  module.data.accounts[0].loans.push({ title: "Saved book", dueDate: null, dueDateString: "Unknown" });
+  module.loanData.accounts[0].loans.push({ title: "Saved book", dueDate: null, dueDateString: "Unknown" });
   assert.ok(flatten(module.getDom()).some(n => n.className.includes("catalogplus-stale")));
 });
 test("helper reads configured accounts once and never echoes credentials", () => {
@@ -87,11 +87,11 @@ test("covers use UPC endpoint, preserve leading zero, and fail gracefully", () =
   const loan = normalizeLoan({ itemId: "example", resource: { shortTitle: "Example", upc: "043396425101" } });
   const module = moduleInstance();
   module.config.showCovers = true;
-  module.data = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [loan] }] };
+  module.loanData = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [loan] }] };
   const nodes = flatten(module.getDom());
   const img = nodes.find(n => n.tag === "img");
   const url = new URL(img.src);
-  assert.equal(url.origin, "https://ls2content3.tlcdelivers.com");
+  assert.equal(url.origin, "https://ls2content.tlcdelivers.com");
   assert.equal(url.searchParams.get("customerid"), "009787");
   assert.equal(url.searchParams.get("requesttype"), "BOOKJACKET-MD");
   assert.equal(url.searchParams.get("upc"), "043396425101");
@@ -119,7 +119,7 @@ test("cover overrides, missing UPCs and unsafe URLs", () => {
 test("UI size, density, sorting, filters and visibility are independent", () => {
   const module = moduleInstance();
   Object.assign(module.config, { width: 500, density: "spacious", rowGap: 12, fontScale: 1.2, sortBy: "title", showDueDate: false, showDaysRemaining: false, titleLines: 2, showSummary: true, showLastUpdated: true });
-  module.data = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [
+  module.loanData = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [
     { title: "Z overdue", dueDate: Date.now() - 86400000 },
     { title: "A later", dueDate: Date.now() + 864000000 },
     { title: "Unknown", dueDate: null }
@@ -138,8 +138,8 @@ test("UI size, density, sorting, filters and visibility are independent", () => 
   module.config.hideWhenEmpty = true;
   assert.equal(module.getDom().hidden, true);
   module.config.accountNames = [];
-  module.data.accounts[0].loans = [];
-  module.data.accounts[0].error = "Unavailable";
+  module.loanData.accounts[0].loans = [];
+  module.loanData.accounts[0].error = "Unavailable";
   assert.notEqual(module.getDom().hidden, true);
 });
 
@@ -157,7 +157,7 @@ test("browser diagnostics distinguish empty success, failure and pending fetch",
 
 test("ISBN covers preserve every unique ISBN as a repeated query parameter", () => {
   const url = new URL(display.coverUrl({ isbn: "9781402894626", isbns: ["9781402894626", "080442957X", "invalid"] }, { coverSize: "small" }));
-  assert.equal(url.origin, "https://ls2content2.tlcdelivers.com");
+  assert.equal(url.origin, "https://ls2content.tlcdelivers.com");
   assert.equal(url.searchParams.get("requesttype"), "BOOKJACKET-SM");
   assert.deepEqual(url.searchParams.getAll("isbn"), ["9781402894626", "080442957X"]);
   assert.equal(url.searchParams.has("upc"), false);
@@ -166,9 +166,44 @@ test("ISBN covers preserve every unique ISBN as a repeated query parameter", () 
 test("optional loan metadata renders as text and stays hidden by default", () => {
   const module = moduleInstance();
   const loan = { title: "Example", dueDate: Date.now(), callNumber: "EXAMPLE-123", extent: "200 pages", publicationDate: "2024", series: "Example series", outDateString: "Example checkout date", status: "Example status", message: "<script>notice</script>" };
-  module.data = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [loan] }] };
+  module.loanData = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [loan] }] };
   assert.doesNotMatch(flatten(module.getDom()).map(n => n.textContent).join(" "), /EXAMPLE-123|200 pages/);
   Object.assign(module.config, { showCallNumber: true, showPublicationDate: true, showExtent: true, showSeries: true, showCheckoutDate: true, showLoanStatus: true });
   const text = flatten(module.getDom()).map(n => n.textContent).join(" ");
   for (const value of ["EXAMPLE-123", "200 pages", "2024", "Example series", "Example checkout date", "Example status", "<script>notice</script>"]) assert.ok(text.includes(value));
+});
+
+
+test("custom content server and customer ID support base and endpoint URLs", () => {
+  for (const address of ["https://covers.example.org", "https://covers.example.org/", "https://covers.example.org/tlccontent"]) {
+    const url = new URL(display.coverUrl({ isbn: "9781402894626" }, { customerID: "001234", contentServerAddress: address }));
+    assert.equal(url.origin, "https://covers.example.org");
+    assert.equal(url.pathname, "/tlccontent");
+    assert.equal(url.searchParams.get("customerid"), "001234");
+    assert.equal(url.searchParams.get("isbn"), "9781402894626");
+  }
+  assert.equal(display.coverUrl({ upc: "043396425101" }, { contentServerAddress: "javascript:alert(1)" }), "");
+  assert.equal(new URL(display.coverUrl({ upc: "043396425101" }, { coverCustomerId: "009999" })).searchParams.get("customerid"), "009999");
+});
+
+
+test("startup and loan notifications preserve MagicMirror module metadata", () => {
+  const module = moduleInstance();
+  const metadata = { name: "MMM-CARL", identifier: "module_2_MMM-CARL", path: "modules/MMM-CARL", header: "Library loans", position: "top_right" };
+  module.data = metadata;
+  module.file = file => `${module.data.path}/${file}`;
+  const messages = [];
+  module.sendSocketNotification = (name, payload) => messages.push({ name, payload });
+  try {
+    module.start();
+    assert.equal(module.data, metadata);
+    assert.equal(module.loanData, null);
+    assert.ok(flatten(module.getDom()).some(n => /Loading/.test(n.textContent)));
+    assert.ok(module.getScripts().every(file => file.startsWith("modules/MMM-CARL/")));
+    module.socketNotificationReceived("CATALOGPLUS_DATA", { accounts: [{ name: "Home", loans: [], updatedAt: Date.now() }] });
+    assert.equal(module.data, metadata);
+    assert.equal(module.data.header, "Library loans");
+    assert.ok(flatten(module.getDom()).some(n => /No items checked out/.test(n.textContent)));
+    assert.equal(messages[0].name, "CATALOGPLUS_SUBSCRIBE");
+  } finally { module.suspend(); }
 });

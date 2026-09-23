@@ -7,7 +7,7 @@ Module.register("MMM-CARL", {
     locale: "en-US", animationSpeed: 300,
     width: "360px", maxHeight: "none", density: "compact", fontScale: 1,
     rowGap: null, rowPadding: null, layout: "list", titleLines: 0,
-    showCovers: false, coverUrls: {}, coverCustomerId: "009787", coverWidth: 42, coverHeight: 62,
+    showCovers: false, coverUrls: {}, customerID: "009787", contentServerAddress: "https://ls2content.tlcdelivers.com", coverCustomerId: null, coverWidth: 42, coverHeight: 62,
     coverFit: "contain", coverSize: "medium", coverPlaceholder: true,
     showBranch: false, showCallNumber: false, showPublicationDate: false,
     showExtent: false, showSeries: false, showCheckoutDate: false, showLoanStatus: false, showDueDate: true, showDaysRemaining: true,
@@ -22,7 +22,7 @@ Module.register("MMM-CARL", {
   debugLog(event, details) { CarlDebug.createDebug(this.config.debug)(event, details); },
   start() {
     this.debugLog("browser.start");
-    this.data = null;
+    this.loanData = null;
     this.error = null;
     this.subscribe();
     this.startClock();
@@ -41,7 +41,7 @@ Module.register("MMM-CARL", {
   suspend() { clearInterval(this.clock); },
   resume() { this.startClock(); this.subscribe(); this.updateDom(0); },
   socketNotificationReceived(notification, payload) {
-    if (notification === "CATALOGPLUS_DATA") { this.debugLog("browser.data", { accounts: payload.accounts.length, loans: payload.accounts.reduce((sum, a) => sum + a.loans.length, 0), failed: payload.accounts.filter(a => a.error).length, pending: payload.accounts.filter(a => !a.updatedAt && !a.error).length }); this.data = payload; this.error = null; }
+    if (notification === "CATALOGPLUS_DATA") { this.debugLog("browser.data", { accounts: payload.accounts.length, loans: payload.accounts.reduce((sum, a) => sum + a.loans.length, 0), failed: payload.accounts.filter(a => a.error).length, pending: payload.accounts.filter(a => !a.updatedAt && !a.error).length }); this.loanData = payload; this.error = null; }
     else if (notification === "CATALOGPLUS_ERROR") { this.debugLog("browser.error"); this.error = payload; }
     else return;
     this.updateDom(this.config.animationSpeed);
@@ -66,14 +66,14 @@ Module.register("MMM-CARL", {
     wrapper.style.setProperty("--cp-cover-height", `${Math.min(300, Math.max(20, Number(c.coverHeight) || 62))}px`);
     wrapper.style.setProperty("--cp-cover-fit", c.coverFit === "cover" ? "cover" : "contain");
     if (this.error && c.showErrors) wrapper.appendChild(el("div", "catalogplus-error small", this.error));
-    if (!this.data) {
+    if (!this.loanData) {
       if (!this.error) wrapper.appendChild(el("div", "dimmed small", "Loading library loans…"));
       return wrapper;
     }
     let dateFormat;
     try { dateFormat = new Intl.DateTimeFormat(this.config.locale, { ...c.dateFormat, timeZone: c.timeZone }); }
     catch { wrapper.appendChild(el("div", "catalogplus-error small", "Invalid date format, locale or time zone.")); return wrapper; }
-    const accounts = this.data.accounts.filter(account => !Array.isArray(c.accountNames) || !c.accountNames.length || c.accountNames.includes(account.name));
+    const accounts = this.loanData.accounts.filter(account => !Array.isArray(c.accountNames) || !c.accountNames.length || c.accountNames.includes(account.name));
     for (const account of accounts) {
       if (account.error && c.showErrors) {
         const stale = account.updatedAt ? ` Showing saved loans from ${dateFormat.format(account.updatedAt)}.` : "";

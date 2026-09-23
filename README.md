@@ -92,7 +92,9 @@ All options go inside the module's `config`. Defaults preserve the compact, text
 | `colorMode` | `"color"` | `color` or `monochrome`; countdown text still communicates urgency. |
 | `showStatusBorder` | `true` | Show the due-status border; stale rows use a dashed border when enabled. |
 | `showCovers` | `false` | Load cover images using TLC UPC or ISBN endpoints. |
-| `coverCustomerId` | `"009787"` | Customer ID for TLC covers; keep it quoted to preserve leading zeros. |
+| `customerID` | `"009787"` | Customer ID for TLC covers; keep it quoted to preserve leading zeros. |
+| `contentServerAddress` | `"https://ls2content.tlcdelivers.com"` | HTTPS content server base address or full `/tlccontent` endpoint. Used for both UPC and ISBN covers. |
+| `coverCustomerId` | `null` | Legacy alias; when set, takes precedence over `customerID`. |
 | `coverWidth` / `coverHeight` | `42` / `62` | Image dimensions in pixels (width 20–200, height 20–300). |
 | `coverSize` | `"medium"` | TLC image request size: `small` (`BOOKJACKET-SM`) or `medium` (`BOOKJACKET-MD`). |
 | `coverFit` | `"contain"` | `contain` shows the whole image; `cover` fills the box with cropping. |
@@ -154,7 +156,7 @@ colorMode: "monochrome"
 
 Live loan records expose cover identifiers in `resource.standardNumbers`, as `{ type: "Upc" | "Isbn", data: "..." }`. MMM-CARL preserves all unique UPCs and ISBNs in their supplied order, removes spaces/hyphens, and preserves leading zeros and ISBN-10 X check digits. Legacy `resource.upc`/`resource.isbn` and top-level equivalents are also accepted. Numeric identifiers are not guessed or zero-padded.
 
-UPC covers use `https://ls2content3.tlcdelivers.com/tlccontent`; ISBN covers use `https://ls2content2.tlcdelivers.com/tlccontent`. Both send `customerid=009787`, `appid=ls2pac`, and `requesttype=BOOKJACKET-MD` by default (`BOOKJACKET-SM` with `coverSize: "small"`). Every identifier is sent as a repeated `upc` or `isbn` query parameter, matching the catalog's multi-ISBN requests. UPC is preferred if a record contains both types.
+UPC and ISBN covers use the configured `contentServerAddress` (the `/tlccontent` path is appended if needed). Both send the configured `customerID` as `customerid`, `appid=ls2pac`, and `requesttype=BOOKJACKET-MD` by default (`BOOKJACKET-SM` with `coverSize: "small"`). Every identifier is sent as a repeated `upc` or `isbn` query parameter, matching the catalog's multi-ISBN requests. UPC is preferred if a record contains both types.
 
 Image precedence is `coverUrls[itemId]`, then an optional `resource.coverUrl`, then the generated TLC request. Only HTTPS URLs are loaded. Images load lazily with no referrer, and errors switch to the placeholder. A provider-supplied “no cover” image is shown as returned. No library authentication cookie is attached by this module to cover requests. The live `imageDisplays` entries are format icons such as `Book.png`, not book jackets, and are not treated as cover URLs.
 
@@ -195,6 +197,11 @@ No card numbers, login last names, account labels, titles, UPCs, image URLs, coo
 
 `scripts/check-account.js` and the module use the same `lib/client.js`. `node_helper.js` receives the account configuration and starts `lib/service.js`. `MMM-CARL.js`, `lib/display.js` and `MMM-CARL.css` render the browser display using text nodes.
 
-All 25 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering, the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. Live login, loan retrieval and session reuse have been verified locally. Offset pagination was verified live with two-item pages, and cover endpoints returned image responses for all four current loans. The actual MagicMirror deployment still needs a deployment check.
+All 27 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering, the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. Live login, loan retrieval and session reuse have been verified locally. Offset pagination was verified live with two-item pages, and cover endpoints returned image responses for all four current loans. The actual MagicMirror deployment still needs a deployment check.
 
 Module lifecycle and socket conventions follow the [MagicMirror node-helper documentation](https://docs.magicmirror.builders/module-development/node-helper.html) and [core module documentation](https://docs.magicmirror.builders/module-development/core-module-file.html).
+
+
+### Blank display after the clock loads
+
+Earlier versions of MMM-CARL overwrote MagicMirror's reserved `this.data` module metadata. This is fixed by storing library results separately in `this.loanData`. Update the remote installation's `MMM-CARL.js` (or deploy the full updated module), restart the MagicMirror process, and reload any separate browser clients. This fix requires no account configuration changes.
