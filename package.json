@@ -1,0 +1,9 @@
+{
+  "name": "mmm-catalogplus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Household CatalogPlus loans for MagicMirror²",
+  "engines": { "node": ">=20.19.0" },
+  "scripts": { "test": "node --test", "check": "node scripts/check-account.js" },
+  "dependencies": { "tough-cookie": "^6.0.0" }
+}

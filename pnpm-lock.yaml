@@ -1,0 +1,38 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      tough-cookie:
+        specifier: ^6.0.0
+        version: 6.0.2
+
+packages:
+
+  tldts-core@7.4.14:
+    resolution: {integrity: sha512-KYkjfJHnIC5t+Gy7hPrMHgJmWc/N9FfmS+fggRPSlpFckidpB9HD6OzPsSTkfDH+MpZgcu2tJPGgLfHl979N1Q==}
+
+  tldts@7.4.14:
+    resolution: {integrity: sha512-EahQoi+Q5oqmG3yxRHx+bwn36OaLbtw6jnTFcGjc8fcmktzTgk45xRnzAx8Ch87PFEiqRhoc3FWBmY+LBrvEGQ==}
+    hasBin: true
+
+  tough-cookie@6.0.2:
+    resolution: {integrity: sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA==}
+    engines: {node: '>=16'}
+
+snapshots:
+
+  tldts-core@7.4.14: {}
+
+  tldts@7.4.14:
+    dependencies:
+      tldts-core: 7.4.14
+
+  tough-cookie@6.0.2:
+    dependencies:
+      tldts: 7.4.14

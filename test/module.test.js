@@ -1,0 +1,143 @@
+"use strict";
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const display = require("../lib/display");
+
+class Element {
+  constructor(tag) { this.tag = tag; this.children = []; this.className = ""; this.textContent = ""; this.style = { setProperty(key, value) { this[key] = value; } }; }
+  setAttribute(key, value) { this[key] = value; }
+  appendChild(child) { this.children.push(child); }
+}
+function flatten(node) { return [node, ...node.children.flatMap(flatten)]; }
+function moduleInstance() {
+  let definition;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../MMM-CatalogPlus.js"), "utf8"), {
+    Module: { register(name, value) { assert.equal(name, "MMM-CatalogPlus"); definition = value; } },
+    CatalogPlusDisplay: display, document: { createElement: tag => new Element(tag) },
+    URL, Intl, Date, setInterval, clearInterval
+  });
+  return { ...definition, config: { ...definition.defaults }, updateDom() {} };
+}
+test("browser renders global due order, text safely, states, labels and item limit", () => {
+  const module = moduleInstance();
+  const now = Date.now();
+  module.data = { accounts: [
+    { id: "A", name: "First", updatedAt: now, loans: [{ title: "Later", dueDate: now + 10 * 86400000 }] },
+    { id: "B", name: "Second", updatedAt: now, loans: [{ title: "<script>example</script>", dueDate: now - 2 * 86400000 }, { title: "Today", dueDate: now }] }
+  ] };
+  module.config.maxItems = 2;
+  const nodes = flatten(module.getDom());
+  assert.deepEqual(nodes.filter(n => n.className.includes("catalogplus-title")).map(n => n.textContent), ["<script>example</script>", "Today"]);
+  assert.ok(nodes.some(n => n.className.includes("catalogplus-overdue")));
+  assert.ok(nodes.some(n => n.className.includes("catalogplus-due-today")));
+  assert.ok(nodes.some(n => n.textContent === "+1 more items"));
+  assert.ok(nodes.every(n => n.innerHTML === undefined));
+  module.config.groupByAccount = true;
+  module.config.maxItems = 0;
+  assert.deepEqual(flatten(module.getDom()).filter(n => n.className === "catalogplus-account small").map(n => n.textContent), ["Second", "First"]);
+});
+test("browser distinguishes failed, empty, loading and stale accounts", () => {
+  const module = moduleInstance();
+  assert.match(flatten(module.getDom()).map(n => n.textContent).join(" "), /Loading/);
+  module.data = { accounts: [{ id: "A", name: "Private label", updatedAt: Date.now(), loans: [], error: null }] };
+  assert.match(flatten(module.getDom()).map(n => n.textContent).join(" "), /No items checked out/);
+  module.config.showAccount = false;
+  module.data.accounts[0].error = "Unavailable";
+  let text = flatten(module.getDom()).map(n => n.textContent).join(" ");
+  assert.match(text, /incomplete/);
+  assert.doesNotMatch(text, /Private label/);
+  module.data.accounts[0].loans.push({ title: "Saved book", dueDate: null, dueDateString: "Unknown" });
+  assert.ok(flatten(module.getDom()).some(n => n.className.includes("catalogplus-stale")));
+});
+test("helper reads configured accounts once and never echoes credentials", () => {
+  let definition;
+  let instances = 0;
+  let polls = 0;
+  const config = { accounts: [{ card: "fake-card", lastName: "fake-secret" }] };
+  const messages = [];
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../node_helper.js"), "utf8"), {
+    require(name) {
+      if (name === "node_helper") return { create(value) { definition = value; } };
+      if (name === "./lib/accounts") return { loadAccounts(value) { assert.equal(value, config); return [{ id: "HOME" }]; } };
+      if (name === "./lib/service") return { LoanService: class {
+        constructor(accounts, options) { instances++; assert.equal(options.interval, 3600000); }
+        poll() { polls++; }
+        snapshot() { return { accounts: [] }; }
+        stop() {}
+      } };
+      throw new Error("Unexpected import");
+    }, module: { exports: {} }
+  });
+  definition.sendSocketNotification = (name, data) => messages.push({ name, data });
+  definition.start();
+  definition.socketNotificationReceived("CATALOGPLUS_SUBSCRIBE", config);
+  definition.socketNotificationReceived("CATALOGPLUS_SUBSCRIBE", config);
+  assert.equal(instances, 1);
+  assert.equal(polls, 1);
+  assert.doesNotMatch(JSON.stringify(messages), /fake-card|fake-secret/);
+  definition.stop();
+});
+
+test("covers use UPC endpoint, preserve leading zero, and fail gracefully", () => {
+  const { normalizeLoan } = require("../lib/client");
+  const loan = normalizeLoan({ itemId: "example", resource: { shortTitle: "Example", upc: "043396425101" } });
+  const module = moduleInstance();
+  module.config.showCovers = true;
+  module.data = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [loan] }] };
+  const nodes = flatten(module.getDom());
+  const img = nodes.find(n => n.tag === "img");
+  const url = new URL(img.src);
+  assert.equal(url.origin, "https://ls2content3.tlcdelivers.com");
+  assert.equal(url.searchParams.get("customerid"), "009787");
+  assert.equal(url.searchParams.get("requesttype"), "BOOKJACKET-MD");
+  assert.equal(url.searchParams.get("upc"), "043396425101");
+  img.onerror();
+  assert.equal(img.hidden, true);
+  assert.equal(nodes.find(n => n.className === "catalogplus-cover-placeholder").hidden, false);
+  module.config.coverPlaceholder = false;
+  const second = flatten(module.getDom());
+  second.find(n => n.tag === "img").onerror();
+  assert.equal(second.find(n => n.className === "catalogplus-cover").hidden, true);
+  module.config.showCovers = false;
+  assert.equal(flatten(module.getDom()).some(n => n.tag === "img"), false);
+});
+
+test("cover overrides, missing UPCs and unsafe URLs", () => {
+  assert.equal(display.coverUrl({ itemId: "x" }, { coverUrls: { x: "https://example.com/cover.jpg" } }), "https://example.com/cover.jpg");
+  assert.equal(display.coverUrl({ coverUrl: "javascript:alert(1)" }, {}), "");
+  assert.equal(display.coverUrl({ upc: "invalid" }, {}), "");
+  assert.equal(display.coverUrl({}, {}), "");
+  const { normalizeLoan } = require("../lib/client");
+  assert.equal(normalizeLoan({ resource: { upc: ["bad", "043396425101"] } }).upc, "043396425101");
+  assert.equal(normalizeLoan({ upc: "043396425101" }).upc, "043396425101");
+});
+
+test("UI size, density, sorting, filters and visibility are independent", () => {
+  const module = moduleInstance();
+  Object.assign(module.config, { width: 500, density: "spacious", rowGap: 12, fontScale: 1.2, sortBy: "title", showDueDate: false, showDaysRemaining: false, titleLines: 2, showSummary: true, showLastUpdated: true });
+  module.data = { accounts: [{ name: "Home", updatedAt: Date.now(), loans: [
+    { title: "Z overdue", dueDate: Date.now() - 86400000 },
+    { title: "A later", dueDate: Date.now() + 864000000 },
+    { title: "Unknown", dueDate: null }
+  ] }] };
+  const root = module.getDom();
+  const nodes = flatten(root);
+  assert.equal(root.style["--cp-width"], "500px");
+  assert.equal(root.style["--cp-gap"], "12px");
+  assert.match(root.className, /spacious/);
+  assert.deepEqual(nodes.filter(n => n.className.includes("catalogplus-title")).map(n => n.textContent), ["A later", "Unknown", "Z overdue"]);
+  assert.equal(nodes.some(n => n.className === "catalogplus-due"), false);
+  assert.match(nodes.find(n => n.className.includes("catalogplus-summary")).textContent, /3 checked out · 1 overdue/);
+  module.config.filter = "overdue";
+  assert.equal(flatten(module.getDom()).filter(n => n.className.includes("catalogplus-title")).length, 1);
+  module.config.accountNames = ["Other"];
+  module.config.hideWhenEmpty = true;
+  assert.equal(module.getDom().hidden, true);
+  module.config.accountNames = [];
+  module.data.accounts[0].loans = [];
+  module.data.accounts[0].error = "Unavailable";
+  assert.notEqual(module.getDom().hidden, true);
+});

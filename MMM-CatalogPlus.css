@@ -1,0 +1,38 @@
+.MMM-CatalogPlus .catalogplus { width: 360px; max-width: 100%; text-align: left; }
+.MMM-CatalogPlus .catalogplus-loan { display: flex; gap: 14px; justify-content: space-between; padding: 6px 0 6px 9px; border-left: 3px solid #666; margin-bottom: 5px; }
+.MMM-CatalogPlus .catalogplus-detail { min-width: 0; }
+.MMM-CatalogPlus .catalogplus-title { overflow-wrap: anywhere; line-height: 1.2; }
+.MMM-CatalogPlus .catalogplus-meta { line-height: 1.35; margin-top: 3px; }
+.MMM-CatalogPlus .catalogplus-due { flex-shrink: 0; text-align: right; }
+.MMM-CatalogPlus .catalogplus-normal .catalogplus-days { color: #aaa; }
+.MMM-CatalogPlus .catalogplus-soon { border-color: #e0c86b; }
+.MMM-CatalogPlus .catalogplus-soon .catalogplus-days { color: #e0c86b; }
+.MMM-CatalogPlus .catalogplus-warning { border-color: #f4a65c; }
+.MMM-CatalogPlus .catalogplus-warning .catalogplus-days { color: #f4a65c; font-weight: bold; }
+.MMM-CatalogPlus .catalogplus-due-today { border-color: #ff8066; }
+.MMM-CatalogPlus .catalogplus-due-today .catalogplus-days { color: #ff8066; font-weight: bold; }
+.MMM-CatalogPlus .catalogplus-overdue { border-color: #ff5d6c; }
+.MMM-CatalogPlus .catalogplus-overdue .catalogplus-days { color: #ff5d6c; font-weight: bold; }
+.MMM-CatalogPlus .catalogplus-stale { border-left-style: dashed; }
+.MMM-CatalogPlus .catalogplus-error { color: #f4a65c; margin-bottom: 8px; line-height: 1.3; }
+.MMM-CatalogPlus .catalogplus-account { margin: 10px 0 6px; border-bottom: 1px solid #555; }
+
+/* Per-instance options; no global MagicMirror sizing changes. */
+.MMM-CatalogPlus .catalogplus { width: var(--cp-width, 360px); max-height: var(--cp-height, none); overflow-y: auto; --cp-gap: 5px; --cp-padding: 6px; }
+.MMM-CatalogPlus .catalogplus-density-comfortable { --cp-gap: 9px; --cp-padding: 10px; }
+.MMM-CatalogPlus .catalogplus-density-spacious { --cp-gap: 14px; --cp-padding: 15px; }
+.MMM-CatalogPlus .catalogplus .small { font-size: calc(20px * var(--cp-scale, 1)); }
+.MMM-CatalogPlus .catalogplus .xsmall { font-size: calc(15px * var(--cp-scale, 1)); }
+.MMM-CatalogPlus .catalogplus-loan { margin-bottom: var(--cp-gap); padding-top: var(--cp-padding); padding-bottom: var(--cp-padding); align-items: center; }
+.MMM-CatalogPlus .catalogplus-detail { flex: 1; }
+.MMM-CatalogPlus .catalogplus-due { max-width: 45%; overflow-wrap: anywhere; }
+.MMM-CatalogPlus .catalogplus-clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--cp-title-lines); overflow: hidden; }
+.MMM-CatalogPlus .catalogplus-cover { width: var(--cp-cover-width); height: var(--cp-cover-height); flex: 0 0 var(--cp-cover-width); display: flex; align-items: center; justify-content: center; background: #191919; }
+.MMM-CatalogPlus .catalogplus-cover-image { width: 100%; height: 100%; object-fit: var(--cp-cover-fit); }
+.MMM-CatalogPlus .catalogplus-cover-placeholder { color: #888; font-size: 26px; }
+.MMM-CatalogPlus .catalogplus [hidden] { display: none !important; }
+.MMM-CatalogPlus .catalogplus-cards .catalogplus-loan { background: #151515; border-radius: 5px; padding-right: 10px; }
+.MMM-CatalogPlus .catalogplus-summary, .MMM-CatalogPlus .catalogplus-updated { margin-bottom: 8px; }
+.MMM-CatalogPlus .catalogplus-monochrome .catalogplus-loan { border-color: #aaa; }
+.MMM-CatalogPlus .catalogplus-monochrome .catalogplus-days, .MMM-CatalogPlus .catalogplus-monochrome .catalogplus-error { color: #ddd; }
+.MMM-CatalogPlus .catalogplus-no-border .catalogplus-loan { border-left: none; }
