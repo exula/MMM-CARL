@@ -1,7 +1,8 @@
-/* global Module, CatalogPlusDisplay, CarlDebug */
+/* global Module, MM, CatalogPlusDisplay, CarlDebug */
 Module.register("MMM-CARL", {
   defaults: {
     accounts: [], pollSeconds: 3600, debug: false,
+    rotateWith: null, rotationInterval: 30000, rotationAnimationSpeed: 400,
     showAccount: true, groupByAccount: false, showAuthor: true, showFormat: true,
     maxItems: 10, soonDays: 7, warningDays: 3, timeZone: "America/New_York",
     locale: "en-US", animationSpeed: 300,
@@ -26,6 +27,35 @@ Module.register("MMM-CARL", {
     this.error = null;
     this.subscribe();
     this.startClock();
+  },
+  notificationReceived(notification) {
+    if (notification !== "DOM_OBJECTS_CREATED" || !this.config.rotateWith || this.rotationTimer) return;
+    const peers = [];
+    MM.getModules().enumerate(module => {
+      if (module !== this && module.name === this.config.rotateWith && module.data.position === this.data.position) peers.push(module);
+    });
+    if (peers.length !== 1) {
+      console.warn("[MMM-CARL] Rotation requires exactly one partner module in the same position.");
+      return;
+    }
+    const peer = peers[0];
+    const ownNode = document.getElementById(this.identifier);
+    const peerNode = document.getElementById(peer.identifier);
+    if (!ownNode || !peerNode || ownNode.parentNode !== peerNode.parentNode) return;
+    // Keep both wrappers adjacent in the partner's slot, even if config order differs.
+    peerNode.parentNode.insertBefore(ownNode, peerNode);
+    const interval = Math.max(5000, Number(this.config.rotationInterval) || 30000);
+    const speed = Math.min(interval / 4, Math.max(0, Number(this.config.rotationAnimationSpeed) || 0));
+    const options = { lockString: `${this.identifier}-rotation` };
+    let libraryVisible = false;
+    this.hide(0, () => {}, options);
+    this.rotationTimer = setInterval(() => {
+      const outgoing = libraryVisible ? this : peer;
+      const incoming = libraryVisible ? peer : this;
+      libraryVisible = !libraryVisible;
+      outgoing.hide(speed, () => incoming.show(speed, () => {}, options), options);
+    }, interval);
+    // This timer must continue while CARL is suspended/hidden, so it can show itself again.
   },
   subscribe() {
     this.sendSocketNotification("CATALOGPLUS_SUBSCRIBE", { accounts: this.config.accounts, pollSeconds: this.config.pollSeconds, debug: this.config.debug });

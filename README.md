@@ -176,6 +176,20 @@ Valid JSON without a `Content-Type` header is accepted (observed on live login).
 
 The browser sends the configured accounts to the helper for authentication. The helper returns only normalized loan fields, public account ID/name, last-update time and fixed error messages. Credentials and cookies are never logged or included in these replies. As with other MagicMirror module settings, account credentials are present in the browser configuration. Library loan data is visible to viewers of your MagicMirror, and all instances of this module display the same configured household accounts.
 
+## Alternate with another module
+
+MMM-CARL can alternate with one other module in the same MagicMirror region. For example, set both MMM-CARL and MMM-MealViewer to `position: "top_left"`, then add these settings to MMM-CARL's `config`:
+
+```js
+rotateWith: "MMM-MealViewer",
+rotationInterval: 30000,
+rotationAnimationSpeed: 400
+```
+
+Meals appears first; Library replaces it after 30 seconds, and the pair continues alternating. The wrappers are placed together at the partner's slot so other modules stay in order. The interval is in milliseconds (minimum 5000); the fade duration is also in milliseconds. Defaults are 30000 and 400. Set `rotateWith: null` (the default) to disable rotation.
+
+Exactly one enabled partner with the matching module name must be in the same region. The timer continues while CARL is hidden; server polling continues as usual. Rotation uses its own MagicMirror visibility lock and does not force-show modules hidden by other controllers (such as brightness/remote-control actions). Configure rotation on only one side of the pair.
+
 ## Debug logging
 
 Set `debug: true` inside the module's `config` and restart MagicMirror. Default is `false`. The standalone checker also respects this setting in the config it loads. To enable diagnostics for just one check, run `npm run check -- /path/to/config.js --debug`.
@@ -197,7 +211,7 @@ No card numbers, login last names, account labels, titles, UPCs, image URLs, coo
 
 `scripts/check-account.js` and the module use the same `lib/client.js`. `node_helper.js` receives the account configuration and starts `lib/service.js`. `MMM-CARL.js`, `lib/display.js` and `MMM-CARL.css` render the browser display using text nodes.
 
-All 27 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering, the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. Live login, loan retrieval and session reuse have been verified locally. Offset pagination was verified live with two-item pages, and cover endpoints returned image responses for all four current loans. The actual MagicMirror deployment still needs a deployment check.
+All 28 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering, the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. Live login, loan retrieval and session reuse have been verified locally. Offset pagination was verified live with two-item pages, and cover endpoints returned image responses for all four current loans. The actual MagicMirror deployment still needs a deployment check.
 
 Module lifecycle and socket conventions follow the [MagicMirror node-helper documentation](https://docs.magicmirror.builders/module-development/node-helper.html) and [core module documentation](https://docs.magicmirror.builders/module-development/core-module-file.html).
 

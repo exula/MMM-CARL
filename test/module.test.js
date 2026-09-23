@@ -12,12 +12,12 @@ class Element {
   appendChild(child) { this.children.push(child); }
 }
 function flatten(node) { return [node, ...node.children.flatMap(flatten)]; }
-function moduleInstance(debugApi = require("../lib/debug")) {
+function moduleInstance(debugApi = require("../lib/debug"), overrides = {}) {
   let definition;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../MMM-CARL.js"), "utf8"), {
     Module: { register(name, value) { assert.equal(name, "MMM-CARL"); definition = value; } },
     CarlDebug: debugApi, CatalogPlusDisplay: display, document: { createElement: tag => new Element(tag) },
-    URL, Intl, Date, setInterval, clearInterval
+    URL, Intl, Date, setInterval, clearInterval, ...overrides
   });
   return { ...definition, config: { ...definition.defaults }, updateDom() {} };
 }
@@ -206,4 +206,31 @@ test("startup and loan notifications preserve MagicMirror module metadata", () =
     assert.ok(flatten(module.getDom()).some(n => /No items checked out/.test(n.textContent)));
     assert.equal(messages[0].name, "CATALOGPLUS_SUBSCRIBE");
   } finally { module.suspend(); }
+});
+
+
+test("Meals and CARL alternate in the same slot every 30 seconds without unlocking other modules", () => {
+  const events = [];
+  const parent = { insertBefore(a, b) { events.push(["position", a.id, b.id]); } };
+  const nodes = { carl: { id: "carl", parentNode: parent }, meals: { id: "meals", parentNode: parent } };
+  const peer = { name: "MMM-MealViewer", identifier: "meals", data: { position: "top_left" }, hide: action("meals", "hide"), show: action("meals", "show") };
+  function action(name, method) { return (speed, callback, options) => { events.push([name, method, speed, options.lockString, options.force]); callback(); }; }
+  let tick, interval, timers = 0;
+  const module = moduleInstance(undefined, {
+    MM: { getModules: () => ({ enumerate: fn => fn(peer) }) },
+    document: { getElementById: id => nodes[id] },
+    setInterval(fn, ms) { tick = fn; interval = ms; timers++; return 1; }
+  });
+  module.identifier = "carl"; module.data = { position: "top_left" };
+  module.config.rotateWith = "MMM-MealViewer";
+  module.hide = action("carl", "hide"); module.show = action("carl", "show");
+  module.notificationReceived("DOM_OBJECTS_CREATED");
+  assert.equal(interval, 30000);
+  assert.deepEqual(events[0], ["position", "carl", "meals"]);
+  assert.equal(events[1][1], "hide");
+  tick(); tick();
+  assert.deepEqual(events.slice(2).map(e => e.slice(0, 2)), [["meals", "hide"], ["carl", "show"], ["carl", "hide"], ["meals", "show"]]);
+  assert.ok(events.slice(1).every(e => e[3] === "carl-rotation" && e[4] === undefined));
+  module.notificationReceived("DOM_OBJECTS_CREATED");
+  assert.equal(timers, 1);
 });
