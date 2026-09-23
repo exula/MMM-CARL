@@ -159,10 +159,27 @@ The first path number is treated as an **offset**: subsequent full pages request
 
 The browser sends the configured accounts to the helper for authentication. The helper returns only normalized loan fields, public account ID/name, last-update time and fixed error messages. Credentials and cookies are never logged or included in these replies. As with other MagicMirror module settings, account credentials are present in the browser configuration. Library loan data is visible to viewers of your MagicMirror, and all instances of this module display the same configured household accounts.
 
+## Debug logging
+
+Set `debug: true` inside the module's `config` and restart MagicMirror. Default is `false`. The standalone checker also respects this setting in the config it loads.
+
+```js
+config: {
+  debug: true,
+  accounts: [
+    { name: "Home", card: "<library-card>", lastName: "<last-name>" }
+  ]
+}
+```
+
+Server diagnostics appear in the MagicMirror terminal or service logs. Display diagnostics appear in the browser developer console. All lines start with `[MMM-CARL]` and a timestamp. Server events include poll start/completion and next interval, account index and loan counts, login attempts, session reuse/renewal, page counts, HTTP status, request timing and sanitized error codes. Browser events include startup, received account/loan counts, configuration errors, and failed cover images.
+
+No card numbers, login last names, account labels, titles, UPCs, image URLs, cookies, request/response bodies or raw exceptions are logged. Accounts are identified by their 1-based position in the configuration. Request response timing is time to response headers; failed-request timing includes time spent before failure. Cover failures are counted as events without identifying the item. Debug logs do not trigger additional requests. For multiple display instances, the first subscription sets server debugging along with the shared household configuration; use the same `debug` value in each instance.
+
 ## Files and validation
 
 `scripts/check-account.js` and the module use the same `lib/client.js`. `node_helper.js` receives the account configuration and starts `lib/service.js`. `MMM-CARL.js`, `lib/display.js` and `MMM-CARL.css` render the browser display using text nodes.
 
-All 16 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. The actual MagicMirror integration and live CatalogPlus endpoints still require a deployment check.
+All 19 automated tests pass. `npm test` covers authentication payloads, cookie rotation/reuse, account isolation, bounded session renewal, pagination, request coalescing, redacted errors, timeouts, partial failures, sorting, daylight saving boundaries, frontend rendering the helper/browser boundary, UPC image URLs, broken-image fallbacks, filters and display options. The actual MagicMirror integration and live CatalogPlus endpoints still require a deployment check.
 
 Module lifecycle and socket conventions follow the [MagicMirror node-helper documentation](https://docs.magicmirror.builders/module-development/node-helper.html) and [core module documentation](https://docs.magicmirror.builders/module-development/core-module-file.html).

@@ -16,7 +16,7 @@ function moduleInstance() {
   let definition;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../MMM-CARL.js"), "utf8"), {
     Module: { register(name, value) { assert.equal(name, "MMM-CARL"); definition = value; } },
-    CatalogPlusDisplay: display, document: { createElement: tag => new Element(tag) },
+    CarlDebug: require("../lib/debug"), CatalogPlusDisplay: display, document: { createElement: tag => new Element(tag) },
     URL, Intl, Date, setInterval, clearInterval
   });
   return { ...definition, config: { ...definition.defaults }, updateDom() {} };
@@ -60,6 +60,7 @@ test("helper reads configured accounts once and never echoes credentials", () =>
   const messages = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../node_helper.js"), "utf8"), {
     require(name) {
+      if (name === "./lib/debug") return require("../lib/debug");
       if (name === "node_helper") return { create(value) { definition = value; } };
       if (name === "./lib/accounts") return { loadAccounts(value) { assert.equal(value, config); return [{ id: "HOME" }]; } };
       if (name === "./lib/service") return { LoanService: class {

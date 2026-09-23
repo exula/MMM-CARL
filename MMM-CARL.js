@@ -1,7 +1,7 @@
-/* global Module, CatalogPlusDisplay */
+/* global Module, CatalogPlusDisplay, CarlDebug */
 Module.register("MMM-CARL", {
   defaults: {
-    accounts: [], pollSeconds: 3600,
+    accounts: [], pollSeconds: 3600, debug: false,
     showAccount: true, groupByAccount: false, showAuthor: true, showFormat: true,
     maxItems: 10, soonDays: 7, warningDays: 3, timeZone: "America/New_York",
     locale: "en-US", animationSpeed: 300,
@@ -17,15 +17,17 @@ Module.register("MMM-CARL", {
     colorMode: "color", showStatusBorder: true
   },
   getStyles() { return ["MMM-CARL.css"]; },
-  getScripts() { return [this.file("lib/display.js")]; },
+  getScripts() { return [this.file("lib/display.js"), this.file("lib/debug.js")]; },
+  debugLog(event, details) { CarlDebug.createDebug(this.config.debug)(event, details); },
   start() {
+    this.debugLog("browser.start");
     this.data = null;
     this.error = null;
     this.subscribe();
     this.startClock();
   },
   subscribe() {
-    this.sendSocketNotification("CATALOGPLUS_SUBSCRIBE", { accounts: this.config.accounts, pollSeconds: this.config.pollSeconds });
+    this.sendSocketNotification("CATALOGPLUS_SUBSCRIBE", { accounts: this.config.accounts, pollSeconds: this.config.pollSeconds, debug: this.config.debug });
   },
   startClock() {
     clearInterval(this.clock);
@@ -38,8 +40,8 @@ Module.register("MMM-CARL", {
   suspend() { clearInterval(this.clock); },
   resume() { this.startClock(); this.subscribe(); this.updateDom(0); },
   socketNotificationReceived(notification, payload) {
-    if (notification === "CATALOGPLUS_DATA") { this.data = payload; this.error = null; }
-    else if (notification === "CATALOGPLUS_ERROR") this.error = payload;
+    if (notification === "CATALOGPLUS_DATA") { this.debugLog("browser.data", { accounts: payload.accounts.length, loans: payload.accounts.reduce((sum, a) => sum + a.loans.length, 0) }); this.data = payload; this.error = null; }
+    else if (notification === "CATALOGPLUS_ERROR") { this.debugLog("browser.error"); this.error = payload; }
     else return;
     this.updateDom(this.config.animationSpeed);
   },
@@ -123,7 +125,7 @@ Module.register("MMM-CARL", {
             if (url) {
               const img = el("img", "catalogplus-cover-image");
               img.alt = ""; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
-              img.onerror = () => { img.hidden = true; placeholder.hidden = !c.coverPlaceholder; if (!c.coverPlaceholder) cover.hidden = true; };
+              img.onerror = () => { this.debugLog("cover.failed"); img.hidden = true; placeholder.hidden = !c.coverPlaceholder; if (!c.coverPlaceholder) cover.hidden = true; };
               img.src = url;
               cover.appendChild(img);
             }
