@@ -224,6 +224,7 @@ test("Meals and CARL alternate in the same slot every 30 seconds without unlocki
   });
   module.identifier = "carl"; module.data = { position: "top_left" };
   module.config.rotateWith = "MMM-MealViewer";
+  module.config.skipRotationWhenEmpty = false;
   module.hide = action("carl", "hide"); module.show = action("carl", "show");
   module.notificationReceived("DOM_OBJECTS_CREATED");
   assert.equal(interval, 30000);
@@ -234,4 +235,111 @@ test("Meals and CARL alternate in the same slot every 30 seconds without unlocki
   assert.ok(events.slice(1).every(e => e[3] === "carl-rotation" && e[4] === undefined));
   module.notificationReceived("DOM_OBJECTS_CREATED");
   assert.equal(timers, 1);
+});
+
+function rotationHarness({ delayed = false, config = {} } = {}) {
+  const events = [], callbacks = [], timers = new Map();
+  let nextTimer = 0;
+  const parent = { insertBefore() {} };
+  const action = (name, method) => (speed, callback, options) => {
+    events.push({ name, method, speed, options });
+    if (delayed) callbacks.push(callback); else callback();
+  };
+  const peer = { name: "MMM-MealViewer", identifier: "meals", data: { position: "top_left" }, hide: action("meals", "hide"), show: action("meals", "show") };
+  const module = moduleInstance(undefined, {
+    MM: { getModules: () => ({ enumerate: fn => fn(peer) }) },
+    document: { getElementById: () => ({ parentNode: parent }) },
+    setInterval(fn, ms) { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
+    clearInterval(id) { timers.delete(id); }
+  });
+  module.identifier = "carl";
+  module.data = { position: "top_left" };
+  Object.assign(module.config, { rotateWith: "MMM-MealViewer" }, config);
+  module.hide = action("carl", "hide"); module.show = action("carl", "show");
+  const data = accounts => module.socketNotificationReceived("CATALOGPLUS_DATA", { accounts });
+  const tick = () => { for (const timer of [...timers.values()]) timer.fn(); };
+  const flush = () => { while (callbacks.length) callbacks.shift()(); };
+  module.notificationReceived("DOM_OBJECTS_CREATED");
+  flush();
+  return { module, events, timers, callbacks, data, tick, flush };
+}
+const rotationAccount = (loans = [], extra = {}) => ({ name: "Home", loans, updatedAt: 1000, ...extra });
+
+test("empty rotation stays on Meals, then gives Meals a fresh interval when checkouts arrive", () => {
+  const h = rotationHarness();
+  assert.equal(h.timers.size, 0);
+  h.data([rotationAccount()]);
+  assert.equal(h.timers.size, 0);
+  assert.ok(!h.events.some(e => e.name === "meals" && e.method === "hide"));
+  h.data([rotationAccount([{ title: "Book" }])]);
+  assert.equal(h.timers.size, 1);
+  assert.equal([...h.timers.values()][0].ms, 30000);
+  assert.equal(h.module.libraryVisible, false);
+  const timer = h.module.rotationTimer;
+  h.data([rotationAccount([{ title: "Book" }])]);
+  h.module.notificationReceived("DOM_OBJECTS_CREATED");
+  assert.equal(h.module.rotationTimer, timer);
+  h.tick();
+  assert.equal(h.module.libraryVisible, true);
+  h.data([rotationAccount()]);
+  assert.equal(h.module.libraryVisible, false);
+  assert.equal(h.timers.size, 0);
+  assert.deepEqual(h.events.slice(-2).map(e => [e.name, e.method]), [["carl", "hide"], ["meals", "show"]]);
+  assert.ok(h.events.every(e => e.options.lockString === "carl-rotation" && e.options.force === undefined));
+  h.data([rotationAccount([{ title: "Another" }])]);
+  assert.equal(h.timers.size, 1);
+  h.data([rotationAccount()]);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.module.libraryVisible, false);
+});
+
+test("rotation eligibility uses selected accounts before filters and includes incomplete or failed data", () => {
+  const h = rotationHarness({ config: { accountNames: ["Home"], filter: "overdue" } });
+  h.data([rotationAccount(), rotationAccount([{ title: "Ignored" }], { name: "Other" })]);
+  assert.equal(h.module.rotationEligible(), false);
+  h.data([rotationAccount([{ title: "Future", dueDate: Date.now() + 86400000 }])]);
+  assert.equal(h.module.rotationEligible(), true);
+  for (const extra of [{ error: "Unavailable" }, { updatedAt: null }, { error: "Unavailable", updatedAt: null }]) {
+    h.data([rotationAccount([], extra)]);
+    assert.equal(h.module.rotationEligible(), true);
+  }
+  h.data([rotationAccount([{ title: "Saved" }], { error: "Unavailable" })]);
+  assert.equal(h.module.rotationEligible(), true);
+  h.data([rotationAccount()]);
+  h.module.socketNotificationReceived("CATALOGPLUS_ERROR", "Service unavailable");
+  assert.equal(h.module.rotationEligible(), true);
+  h.tick();
+  assert.equal(h.module.libraryVisible, true);
+  h.data([rotationAccount()]);
+  assert.equal(h.module.rotationEligible(), false);
+});
+
+test("a delayed fade cannot show CARL after its last checkout disappears", () => {
+  const h = rotationHarness({ delayed: true });
+  h.data([rotationAccount([{ title: "Book" }])]);
+  h.tick(); // Meals is fading out, but CARL has not been shown yet.
+  h.data([rotationAccount()]);
+  h.flush();
+  assert.ok(!h.events.some(e => e.name === "carl" && e.method === "show"));
+  assert.equal(h.events.at(-1).name, "meals");
+  assert.equal(h.events.at(-1).method, "show");
+  assert.equal(h.module.rotationTransition, false);
+  h.data([rotationAccount([{ title: "New book" }])]);
+  assert.equal(h.module.libraryVisible, false);
+  h.tick(); h.flush();
+  assert.equal(h.events.at(-1).name, "carl");
+  h.tick(); // CARL is fading out.
+  h.data([rotationAccount()]);
+  h.flush();
+  assert.equal(h.events.at(-1).name, "meals");
+  assert.equal(h.timers.size, 0);
+});
+
+test("rotation rechecks eligibility before each transition", () => {
+  const h = rotationHarness();
+  h.data([rotationAccount([{ title: "Book" }])]);
+  h.module.loanData.accounts[0].loans = [];
+  h.tick();
+  assert.equal(h.module.libraryVisible, false);
+  assert.equal(h.timers.size, 0);
 });

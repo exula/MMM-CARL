@@ -3,7 +3,7 @@ Module.register("MMM-CARL", {
   defaults: {
     catalogUrl: "https://catalogplus.libraryweb.org", configName: "default",
     accounts: [], pollSeconds: 3600, debug: false,
-    rotateWith: null, rotationInterval: 30000, rotationAnimationSpeed: 400,
+    rotateWith: null, rotationInterval: 30000, rotationAnimationSpeed: 400, skipRotationWhenEmpty: true,
     showAccount: true, groupByAccount: false, showAuthor: true, showFormat: true,
     maxItems: 10, soonDays: 7, warningDays: 3, timeZone: "America/New_York",
     locale: "en-US", animationSpeed: 300,
@@ -30,7 +30,7 @@ Module.register("MMM-CARL", {
     this.startClock();
   },
   notificationReceived(notification) {
-    if (notification !== "DOM_OBJECTS_CREATED" || !this.config.rotateWith || this.rotationTimer) return;
+    if (notification !== "DOM_OBJECTS_CREATED" || !this.config.rotateWith || this.rotationPeer) return;
     const peers = [];
     MM.getModules().enumerate(module => {
       if (module !== this && module.name === this.config.rotateWith && module.data.position === this.data.position) peers.push(module);
@@ -45,18 +45,58 @@ Module.register("MMM-CARL", {
     if (!ownNode || !peerNode || ownNode.parentNode !== peerNode.parentNode) return;
     // Keep both wrappers adjacent in the partner's slot, even if config order differs.
     peerNode.parentNode.insertBefore(ownNode, peerNode);
-    const interval = Math.max(5000, Number(this.config.rotationInterval) || 30000);
-    const speed = Math.min(interval / 4, Math.max(0, Number(this.config.rotationAnimationSpeed) || 0));
-    const options = { lockString: `${this.identifier}-rotation` };
-    let libraryVisible = false;
-    this.hide(0, () => {}, options);
+    this.rotationPeer = peer;
+    this.rotationInterval = Math.max(5000, Number(this.config.rotationInterval) || 30000);
+    this.rotationSpeed = Math.min(this.rotationInterval / 4, Math.max(0, Number(this.config.rotationAnimationSpeed) || 0));
+    this.rotationOptions = { lockString: `${this.identifier}-rotation` };
+    this.libraryVisible = false;
+    this.rotationVersion = 0;
+    this.hide(0, () => {}, this.rotationOptions);
+    this.reconcileRotation();
+  },
+  rotationEligible() {
+    if (!this.config.skipRotationWhenEmpty) return true;
+    if (this.error) return true;
+    if (!this.loanData) return false;
+    const accounts = this.loanData.accounts.filter(account => !Array.isArray(this.config.accountNames) || !this.config.accountNames.length || this.config.accountNames.includes(account.name));
+    return accounts.some(account => account.loans.length || account.error || !account.updatedAt);
+  },
+  scheduleRotation() {
+    clearInterval(this.rotationTimer);
+    // Rotation must continue while CARL is suspended; server polling also continues.
     this.rotationTimer = setInterval(() => {
-      const outgoing = libraryVisible ? this : peer;
-      const incoming = libraryVisible ? peer : this;
-      libraryVisible = !libraryVisible;
-      outgoing.hide(speed, () => incoming.show(speed, () => {}, options), options);
-    }, interval);
-    // This timer must continue while CARL is suspended/hidden, so it can show itself again.
+      this.reconcileRotation();
+      if (this.rotationEnabled && !this.rotationTransition) this.transitionRotation(!this.libraryVisible);
+    }, this.rotationInterval);
+  },
+  reconcileRotation() {
+    if (!this.rotationPeer) return;
+    const eligible = this.rotationEligible();
+    if (eligible === this.rotationEnabled) return;
+    this.rotationEnabled = eligible;
+    if (eligible) {
+      // Give Meals a full interval after loans or an error first arrive.
+      this.scheduleRotation();
+    } else {
+      clearInterval(this.rotationTimer);
+      this.rotationTimer = null;
+      this.transitionRotation(false);
+    }
+  },
+  transitionRotation(libraryVisible) {
+    const version = ++this.rotationVersion;
+    const outgoing = libraryVisible ? this.rotationPeer : this;
+    const incoming = libraryVisible ? this : this.rotationPeer;
+    this.libraryVisible = libraryVisible;
+    this.rotationTransition = true;
+    outgoing.hide(this.rotationSpeed, () => {
+      if (version !== this.rotationVersion) return;
+      this.reconcileRotation();
+      if (version !== this.rotationVersion) return;
+      incoming.show(this.rotationSpeed, () => {
+        if (version === this.rotationVersion) this.rotationTransition = false;
+      }, this.rotationOptions);
+    }, this.rotationOptions);
   },
   subscribe() {
     this.sendSocketNotification("CATALOGPLUS_SUBSCRIBE", { catalogUrl: this.config.catalogUrl, configName: this.config.configName, accounts: this.config.accounts, pollSeconds: this.config.pollSeconds, debug: this.config.debug });
@@ -75,6 +115,7 @@ Module.register("MMM-CARL", {
     if (notification === "CATALOGPLUS_DATA") { this.debugLog("browser.data", { accounts: payload.accounts.length, loans: payload.accounts.reduce((sum, a) => sum + a.loans.length, 0), failed: payload.accounts.filter(a => a.error).length, pending: payload.accounts.filter(a => !a.updatedAt && !a.error).length }); this.loanData = payload; this.error = null; }
     else if (notification === "CATALOGPLUS_ERROR") { this.debugLog("browser.error"); this.error = payload; }
     else return;
+    this.reconcileRotation();
     this.updateDom(this.config.animationSpeed);
   },
   getDom() {
