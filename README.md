@@ -269,10 +269,13 @@ MMM-CARL can alternate with one other module in the same MagicMirror region. For
 ```js
 rotateWith: "MMM-MealViewer",
 rotationInterval: 30000,
-rotationAnimationSpeed: 400
+rotationAnimationSpeed: 400,
+skipRotationWhenEmpty: true
 ```
 
-Meals appears first; Library replaces it after 30 seconds, and the pair continues alternating. The wrappers are placed together at the partner's slot so other modules stay in order. The interval is in milliseconds (minimum 5000); the fade duration is also in milliseconds. Defaults are 30000 and 400. Set `rotateWith: null` (the default) to disable rotation.
+Meals appears first. With the default `skipRotationWhenEmpty: true`, Meals stays visible during initial loading and whenever a successful result confirms zero checkouts across the selected accounts. CARL’s entire wrapper, including its header, stays hidden. When checkouts appear, Meals gets a fresh 30-second interval before Library appears, and the pair continues alternating. If the last checkout disappears while Library is visible, it immediately fades back to Meals. The wrappers are placed together at the partner's slot so other modules stay in order. The interval is in milliseconds (minimum 5000); the fade duration is also in milliseconds. Defaults are 30000 and 400. Set `rotateWith: null` (the default) to disable rotation.
+
+Eligibility counts checkouts before due-date filters and item limits: existing checkouts with no filter matches still receive a turn. Account errors, incomplete results, and service errors remain eligible for normal rotation, including saved loans when available. Set `skipRotationWhenEmpty: false` to restore unconditional rotation, including loading and empty messages. This option applies only to rotation; standalone `hideWhenEmpty` behavior is unchanged.
 
 Exactly one enabled partner with the matching module name must be in the same region. The timer continues while CARL is hidden; server polling continues as usual. Rotation uses its own MagicMirror visibility lock and does not force-show modules hidden by other controllers (such as brightness/remote-control actions). Configure rotation on only one side of the pair.
 
